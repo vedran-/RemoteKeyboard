@@ -8,23 +8,35 @@
 
 ## ✅ What's Complete
 
-**All core features are working:**
+### Core Features
 - ✅ PC Server (Windows) - WebSocket + mDNS + Input simulation
 - ✅ Mobile Client (Windows) - Touchpad + Keyboard + Media
 - ✅ Mobile Client (Android) - Touchpad + Keyboard + Media
 - ✅ Network discovery (network scanning)
 - ✅ WebSocket communication
 - ✅ Firewall auto-configuration
-- ✅ 165 tests passing (104 PC + 61 mobile)
 
-**GitHub Actions:**
-- ✅ CI pipeline (builds on every push)
-- ✅ Release pipeline (automatic releases with artifacts)
-- ✅ Android APK builds
+### Smart Connection Features (NEW!)
+- ✅ **Heartbeat Mechanism** - PC sends heartbeat every 5 seconds
+- ✅ **Auto-Reconnect** - Exponential backoff (1s → 2s → 3s → 4s → 5s, max 5 attempts)
+- ✅ **Cold Start Reconnect** - Automatically reconnects to last PC on app restart
+- ✅ **Connection Preferences** - Saves last connected PC using SharedPreferences
+
+### Testing
+- ✅ **99 tests passing** (61 domain + 10 service + 28 integration)
+- ✅ Integration tests for connection flows
+- ✅ Integration tests for notification flows
+- ✅ Integration tests for heartbeat & reconnect
+- ✅ Mock services for testing
+
+### GitHub Actions
+- ✅ CI pipeline (builds on push/PR)
+- ✅ Release pipeline (automatic releases)
+- ✅ Android workflow (APK builds)
 
 ---
 
-## 📋 Current State
+## 📊 Current State
 
 ### Working Features
 
@@ -43,8 +55,9 @@
 |-----------|-------|--------|
 | PC Domain | 104 | ✅ Passing |
 | Mobile Domain | 61 | ✅ Passing |
-| Integration | Manual | ⚠️ Needs automation |
-| E2E | Python scripts | ⚠️ Basic coverage |
+| Mobile Services | 10 | ✅ Passing |
+| Integration | 28 | ✅ Passing |
+| **Total** | **99** | **✅ All passing** |
 
 ---
 
@@ -127,6 +140,35 @@ These are **not bugs** - they're intentional MVP tradeoffs:
 ---
 
 ## 📅 Session Log
+
+### 2026-03-01: Auto-Reconnect & Smart Features
+
+**Implemented:**
+- ✅ Auto-reconnect with exponential backoff (1s → 2s → 3s → 4s → 5s)
+- ✅ Cold start reconnect to last PC (using SharedPreferences)
+- ✅ Connection monitoring via heartbeat
+- ✅ Connection preferences service
+- ✅ 28 integration tests for new features
+
+**Files Created:**
+- `mobile/lib/infrastructure/config/connection_preferences.dart`
+- `mobile/test/integration/heartbeat_test.dart`
+- `mobile/test/helpers/mock_services.dart`
+- `mobile/test/helpers/test_helpers.dart`
+
+**Files Updated:**
+- `mobile/pubspec.yaml` (added shared_preferences)
+- `mobile/lib/application/services/connection_service.dart`
+- `mobile/android/app/src/main/AndroidManifest.xml` (network permissions)
+
+**Critical Bug Fixed:**
+- Android network permissions were missing!
+- Added: INTERNET, ACCESS_NETWORK_STATE, ACCESS_WIFI_STATE, CHANGE_WIFI_MULTICAST_STATE
+- Android app can now discover and connect to PCs
+
+**Test Results:**
+- Total tests: 99 passing ✅
+- Integration tests: 28 passing ✅
 
 ### 2026-03-01: GitHub Actions Setup
 

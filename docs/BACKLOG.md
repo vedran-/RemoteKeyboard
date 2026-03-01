@@ -1,8 +1,24 @@
 # RemoteKeyboard - Feature Backlog
 
-**Last Updated:** 2026-03-01  
-**Status:** MVP Complete ✅  
+**Last Updated:** 2026-03-01
+**Status:** MVP Complete ✅
 **Total Features:** 47 planned
+**Completed:** 13 features
+**Remaining:** 34 features
+
+---
+
+## ✅ Recently Completed
+
+### Auto-Reconnect & Smart Features (2026-03-01)
+- ✅ Heartbeat Mechanism
+- ✅ Auto-Reconnect with exponential backoff
+- ✅ Cold Start Reconnect to last PC
+- ✅ Connection Preferences (SharedPreferences)
+- ✅ Android Network Permissions (critical bug fix!)
+- ✅ Notification System (dismissible, auto-dismiss)
+- ✅ Integration Test Framework
+- ✅ 28 Integration Tests
 
 ---
 

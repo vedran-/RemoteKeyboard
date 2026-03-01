@@ -18,7 +18,10 @@ class IntegrationTestFixture {
   IntegrationTestFixture()
       : connectionService = MockConnectionService(),
         commandService = MockCommandService(),
-        notificationService = MockNotificationService();
+        notificationService = MockNotificationService() {
+    // Ensure Flutter binding is initialized for SharedPreferences
+    TestWidgetsFlutterBinding.ensureInitialized();
+  }
 
   /// Create a test device
   Device createTestDevice({

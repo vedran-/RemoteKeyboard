@@ -9,19 +9,14 @@ import 'package:remote_keyboard_mobile/domain/entities/device.dart';
 import 'package:remote_keyboard_mobile/domain/entities/connection.dart' as domain;
 import 'package:remote_keyboard_mobile/domain/entities/command.dart';
 
-/// Mock ConnectionService for testing
-class MockConnectionService extends app.ConnectionService {
+/// Mock ConnectionService for testing (doesn't extend real class to avoid constructor issues)
+class MockConnectionService extends ChangeNotifier {
   app.ConnectionState _testState = const app.ConnectionState.disconnected();
   final List<Device> _testDevices = [];
   final List<String> calls = [];
 
-  @override
   app.ConnectionState get state => _testState;
-
-  @override
   List<Device> get discoveredDevices => _testDevices;
-
-  @override
   bool get isConnected => _testState.isConnected;
 
   /// Set test state

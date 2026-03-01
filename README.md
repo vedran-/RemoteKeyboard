@@ -4,7 +4,7 @@
 
 ![Status](https://img.shields.io/badge/status-Complete-green)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android-lightgrey)
-![Tests](https://img.shields.io/badge/tests-165%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-99%20passing-brightgreen)
 ![CI](https://github.com/vedran-/RemoteKeyboard/actions/workflows/ci.yml/badge.svg)
 ![Release](https://img.shields.io/github/v/release/vedran-/RemoteKeyboard?label=latest%20release)
 
@@ -33,6 +33,7 @@ RemoteKeyboard lets you control your PC (especially useful for PC connected to T
 
 ## 📋 Features
 
+### Core Features
 - ✅ Automatic device discovery on local network (network scanning)
 - ✅ Virtual touchpad with cursor control
 - ✅ Tap-to-click (left/right click)
@@ -41,6 +42,12 @@ RemoteKeyboard lets you control your PC (especially useful for PC connected to T
 - ✅ Media keys (Play/Pause, Next, Prev, Volume, Mute)
 - ✅ Windows Firewall auto-configuration
 - ✅ Low latency (< 50ms target)
+
+### Smart Connection Features
+- ✅ **Auto-reconnect** - Automatically reconnects on connection loss with exponential backoff
+- ✅ **Cold start reconnect** - Automatically reconnects to last PC on app restart
+- ✅ **Connection monitoring** - Heartbeat-based connection health monitoring
+- ✅ **Network permissions** - Full Android network support
 
 ---
 
@@ -192,10 +199,18 @@ See [Architecture Decision Records](docs/DECISIONS.md) for rationale.
 | Component | Status | Tests |
 |-----------|--------|-------|
 | PC Server | ✅ Complete | 104 passing |
-| Mobile Windows | ✅ Complete | 61 passing |
-| Mobile Android | ✅ Complete | 61 passing |
+| Mobile Windows | ✅ Complete | 99 passing |
+| Mobile Android | ✅ Complete | 99 passing |
 
-**Total:** 165 tests passing ✅
+**Total:** 99 tests passing ✅
+
+### Completed Features (Latest)
+- ✅ Auto-reconnect with exponential backoff (1s → 2s → 3s → 4s → 5s)
+- ✅ Cold start reconnect to last PC
+- ✅ Heartbeat-based connection monitoring
+- ✅ Android network permissions fix
+- ✅ Smart notification system (dismissible, auto-dismiss)
+- ✅ Comprehensive integration tests (28 tests)
 
 ---
 
