@@ -1,0 +1,91 @@
+# ============================================================================
+# Mobile Application - Flutter .gitignore
+# ============================================================================
+# Comprehensive ignores for Flutter projects
+# Source: https://github.com/flutter/flutter/blob/master/.gitignore
+# ============================================================================
+
+# --- Miscellaneous ---
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+
+# --- IntelliJ IDEA ---
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# --- VS Code ---
+# Uncomment if you don't want to track VS Code settings
+# .vscode/
+
+# --- Flutter/Dart/Pub ---
+.dart_tool/
+.flutter-plugins-dependencies
+.flutter-plugins
+.packages
+.pub-cache/
+.pub/
+/build/
+
+# --- Coverage ---
+/coverage/
+
+# --- Symbolication ---
+app.*.symbols
+
+# --- Obfuscation ---
+app.*.map.json
+
+# --- Android ---
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+/android/.gradle/
+/android/captures/
+/android/gradlew
+/android/gradlew.bat
+/android/local.properties
+/android/**/GeneratedPluginRegistrant.java
+/android/**/GeneratedPluginRegistrant.kt
+
+# --- iOS ---
+/ios/Pods/
+/ios/.symlinks/
+/ios/Flutter/Generated.xcconfig
+/ios/Flutter/ephemeral/
+/ios/Flutter/App.framework/Info.plist
+/ios/Flutter/Flutter.framework/
+/ios/Runner/GeneratedPluginRegistrant.h
+/ios/Runner/GeneratedPluginRegistrant.m
+
+# --- macOS ---
+/macos/Pods/
+/macos/Flutter/GeneratedPluginRegistrant.swift
+/macos/Flutter/ephemeral/
+
+# --- Linux ---
+/linux/flutter/ephemeral/
+
+# --- Windows ---
+/windows/flutter/ephemeral/
+
+# --- Test ---
+/test/.test_coverage.dart
+/test/test_random_seed.txt
+
+# --- Assets ---
+# Uncomment if you generate assets
+# assets/fonts/generated/
+
+# ============================================================================
+# End of mobile/.gitignore
+# ============================================================================
