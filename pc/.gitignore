@@ -1,0 +1,47 @@
+# ============================================================================
+# PC Application - Rust + Tauri .gitignore
+# ============================================================================
+# Comprehensive ignores for Rust projects with Tauri frontend
+# ============================================================================
+
+# --- Rust Build Artifacts ---
+/target/
+**/target/
+
+# Cargo lock file (uncomment if building a library)
+# Cargo.lock
+
+# --- Tauri Specific ---
+/gen/
+/icons/
+
+# --- Node.js (Tauri Frontend) ---
+/node_modules/
+npm-debug.log
+yarn-error.log
+
+# --- IDE ---
+/.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- Test & Debug ---
+*.profraw
+*.profdata
+coverage/
+*.gcno
+*.gcda
+
+# --- Temporary Files ---
+*.tmp
+*.temp
+*.bak
+
+# --- Documentation ---
+/doc/api/
+
+# ============================================================================
+# End of pc/.gitignore
+# ============================================================================

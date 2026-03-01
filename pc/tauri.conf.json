@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "RemoteKeyboard PC",
+  "version": "0.1.0",
+  "identifier": "com.remotekeyboard.pc",
+  "build": {
+    "frontendDist": "../frontend",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "title": "RemoteKeyboard PC",
+        "width": 400,
+        "height": 300,
+        "resizable": true,
+        "fullscreen": false,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all",
+    "icon": [],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  },
+  "plugins": {
+    "shell": {
+      "open": true
+    }
+  }
+}
