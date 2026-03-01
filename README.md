@@ -52,6 +52,7 @@ RemoteKeyboard lets you control your PC (especially useful for PC connected to T
 - ✅ **Physical cursor coordinates** - True physical pixels for multi-DPI setups (enigo + xcap)
 - ✅ **Screen capture streaming** - Stream screen area around cursor (5 FPS, configurable zoom)
 - ✅ **Mobile screen display** - View PC screen in touchpad area with cursor indicator
+- ✅ **Cursor always centered** - Capture follows cursor, red dot fixed at image center
 - ✅ **Aspect ratio preservation** - No stretching, black letterboxing
 - ✅ **Bandwidth optimization** - Server-side downscaling (max 400px, Triangle filter)
 

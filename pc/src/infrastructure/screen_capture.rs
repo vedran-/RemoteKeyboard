@@ -93,27 +93,62 @@ impl ScreenCaptureService {
             Error::input(format!("Failed to get monitor height: {}", e))
         })? as i32;
 
-        // Center region on cursor, then clamp to monitor bounds
-        let max_x = (monitor_width - capture_width as i32).max(0);
-        let max_y = (monitor_height - capture_height as i32).max(0);
-        let region_x = (cursor_x - half_width).clamp(0, max_x);
-        let region_y = (cursor_y - half_height).clamp(0, max_y);
+        // Calculate capture region centered on cursor (may extend beyond monitor bounds)
+        let region_x = cursor_x - half_width;
+        let region_y = cursor_y - half_height;
         
-        info!("Capture region: ({},{}) size={}x{} (cursor at physical: {},{})", 
-              region_x, region_y, capture_width, capture_height, cursor_x, cursor_y);
+        // Calculate visible portion (what's actually on the monitor)
+        let visible_x = region_x.max(0);
+        let visible_y = region_y.max(0);
+        let visible_width = (capture_width as i32 - visible_x + region_x).max(0) as u32;
+        let visible_height = (capture_height as i32 - visible_y + region_y).max(0) as u32;
+        
+        // Check if capture extends beyond monitor bounds (for logging)
+        let extends_left = region_x < 0;
+        let extends_right = region_x + capture_width as i32 > monitor_width;
+        let extends_top = region_y < 0;
+        let extends_bottom = region_y + capture_height as i32 > monitor_height;
+        
+        if extends_left || extends_right || extends_top || extends_bottom {
+            info!("Capture extends beyond monitor bounds (L:{}, R:{}, T:{}, B:{}) - cursor at ({},{})", 
+                  extends_left, extends_right, extends_top, extends_bottom, cursor_x, cursor_y);
+        }
+        
+        info!("Capture region: ({},{}) size={}x{} (cursor at physical: {},{}), visible: ({},{}) {}x{}", 
+              region_x, region_y, capture_width, capture_height, cursor_x, cursor_y,
+              visible_x, visible_y, visible_width, visible_height);
 
-        // Capture region
-        let image = monitor.capture_region(
-            region_x as u32,
-            region_y as u32,
-            capture_width,
-            capture_height
-        ).map_err(|e| {
-            Error::input(format!("Failed to capture screen: {}", e))
-        })?;
-
-        // Convert to RGB (JPEG doesn't support alpha channel)
-        let rgb_image = image::DynamicImage::ImageRgba8(image).into_rgb8();
+        // Create black canvas for the full capture size
+        let mut canvas = image::RgbImage::new(capture_width, capture_height);
+        
+        // Capture visible portion and paste onto canvas
+        if visible_width > 0 && visible_height > 0 {
+            // Also clamp to right/bottom monitor bounds
+            let clamped_width = visible_width.min((monitor_width - visible_x) as u32);
+            let clamped_height = visible_height.min((monitor_height - visible_y) as u32);
+            
+            let captured = monitor.capture_region(
+                visible_x as u32,
+                visible_y as u32,
+                clamped_width,
+                clamped_height
+            ).map_err(|e| {
+                Error::input(format!("Failed to capture screen: {}", e))
+            })?;
+            
+            // Convert captured RGBA to RGB
+            let captured_rgb = image::DynamicImage::ImageRgba8(captured).into_rgb8();
+            
+            // Calculate where to paste on canvas (offset from negative region)
+            let paste_x = ((visible_x - region_x) as u32).min(capture_width - 1);
+            let paste_y = ((visible_y - region_y) as u32).min(capture_height - 1);
+            
+            // Paste captured portion onto black canvas
+            image::imageops::replace(&mut canvas, &captured_rgb, paste_x.into(), paste_y.into());
+        }
+        
+        // Use the canvas (already RGB)
+        let rgb_image = canvas;
         
         // Downscale if image is too large (server-side optimization)
         let final_image = if capture_width > max_dimension || capture_height > max_dimension {

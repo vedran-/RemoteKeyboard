@@ -13,7 +13,7 @@ REM   build_run.bat build-android - Build Android APK only
 REM   build_run.bat run-pc       - Run PC server
 REM   build_run.bat run-win      - Run Windows client
 REM   build_run.bat run-both     - Run PC server + Windows client
-REM   build_run.bat build_and_run_all - Build all + Run both (PC + Windows)
+REM   build_run.bat build-run-all - Build all + Run both (PC + Windows)
 REM   build_run.bat test-server  - Run Python test server (for debugging)
 REM   build_run.bat clean        - Clean all builds
 REM ============================================================================
@@ -29,7 +29,7 @@ if "%1"=="build-android" goto :build_android
 if "%1"=="run-pc" goto :run_pc
 if "%1"=="run-win" goto :run_win
 if "%1"=="run-both" goto :run_both
-if "%1"=="build_and_run_all" goto :build_and_run_all
+if "%1"=="build-run-all" goto :build_and_run_all
 if "%1"=="test-server" goto :test_server
 if "%1"=="clean" goto :clean
 
@@ -51,7 +51,7 @@ echo   build_run.bat build-android - Build Android APK only
 echo   build_run.bat run-pc       - Run PC server
 echo   build_run.bat run-win      - Run Windows client
 echo   build_run.bat run-both     - Run PC server + Windows client
-echo   build_run.bat build_and_run_all - Build all + Run both (PC + Windows)
+echo   build_run.bat build-run-all - Build all + Run both (PC + Windows)
 echo   build_run.bat test-server  - Run Python test server (for debugging)
 echo   build_run.bat clean        - Clean all builds
 echo.
@@ -124,17 +124,7 @@ echo Android APK built successfully!
 goto :eof
 
 :build_and_run_all
-echo.
-echo ============================================
-echo Building ALL components...
-echo ============================================
-echo.
 call :build_all
-echo.
-echo ============================================
-echo Running PC Server and Windows Client...
-echo ============================================
-echo.
 call :run_both
 goto :eof
 

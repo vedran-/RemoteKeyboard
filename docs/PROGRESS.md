@@ -47,6 +47,35 @@
 
 ---
 
+### Red Dot Always Centered on Cursor (2026-03-01) ✅
+
+**Problem Fixed:**
+- Red dot jumped around the captured image unpredictably
+- Cursor position was sent as absolute coordinates, not relative to capture
+
+**Solution Implemented:**
+- ✅ Server always centers capture on cursor (even at monitor edges)
+- ✅ Out-of-bounds areas filled with black padding
+- ✅ Cursor always at center of captured image
+- ✅ Red dot always displayed at center (50%, 50%)
+- ✅ Future-ready: black padding can be replaced with adjacent monitor pixels
+
+**Implementation:**
+- Server creates black canvas of capture size
+- Captures only visible portion from monitor
+- Pastes visible portion at correct offset on black canvas
+- Cursor always at `(capture_width/2, capture_height/2)` in result
+
+**Files Modified:**
+- `pc/src/infrastructure/screen_capture.rs` - Manual black padding for edge cases
+- `mobile/lib/presentation/screens/touchpad_screen.dart` - Red dot always centered
+
+**Future Enhancement:**
+- Replace black padding with pixels from adjacent monitors
+- Creates seamless multi-monitor virtual desktop experience
+
+---
+
 ### Screen Streaming - Complete Implementation (Previous)
 
 **Critical Bug Fixed:**
