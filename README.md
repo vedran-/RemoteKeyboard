@@ -204,24 +204,25 @@ See [Architecture Decision Records](docs/DECISIONS.md) for rationale.
 | Component | Status | Tests |
 |-----------|--------|-------|
 | PC Server | ✅ Complete | 119 passing |
-| Mobile Windows | ✅ Complete | 99 passing |
-| Mobile Android | ✅ Complete | 99 passing |
+| Mobile Windows | ✅ Complete | 71 passing |
+| Mobile Android | ✅ Complete | 71 passing |
 
-**Total:** 218 tests passing ✅
+**Total:** 190 tests passing ✅
 
 ### Completed Features (Latest)
-- ✅ Aspect ratio preservation (no stretching, letterboxing)
+- ✅ Screen streaming (5 FPS, multi-monitor, RGBA→RGB fix, no flickering)
+- ✅ Server restart fix (streaming works multiple times per session)
+- ✅ Aspect ratio preservation (no stretching, black letterboxing)
 - ✅ Bandwidth optimization (server-side downscaling to max 400px)
 - ✅ Client-controlled capture dimensions (WxH based on touchpad)
 - ✅ Mobile screen display (touchpad shows PC screen capture)
-- ✅ Screen capture streaming (5 FPS, multi-monitor, zoom control)
 - ✅ Multi-monitor mouse support (clamping workaround)
 - ✅ Auto-reconnect with exponential backoff (1s → 2s → 3s → 4s → 5s)
 - ✅ Cold start reconnect to last PC
 - ✅ Heartbeat-based connection monitoring
 - ✅ Android network permissions fix
 - ✅ Smart notification system (dismissible, auto-dismiss)
-- ✅ Comprehensive integration tests (38 tests)
+- ✅ Comprehensive integration tests
 
 ---
 

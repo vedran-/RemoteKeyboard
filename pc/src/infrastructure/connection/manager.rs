@@ -3,7 +3,6 @@
 //! Manages device connections with single-client model (MVP).
 //! New connections disconnect existing clients.
 
-use std::sync::Arc;
 use parking_lot::RwLock;
 use tracing::{info, warn};
 

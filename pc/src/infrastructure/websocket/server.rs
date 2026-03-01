@@ -4,7 +4,6 @@
 //! Uses tokio-tungstenite for async WebSocket handling.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -13,7 +12,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tracing::{debug, error, info, warn};
 
 use crate::application::ports::{Result, Error};
-use crate::domain::entities::command::{Command, ProtocolMessage, MessageType, ScreenFrame, ScreenControl};
+use crate::domain::entities::command::{Command, ProtocolMessage, MessageType, ScreenControl};
 use crate::infrastructure::screen_capture::ScreenCaptureService;
 
 /// Screen streaming frame rate (FPS)
@@ -217,78 +216,76 @@ async fn handle_connection(
                                             info!("Screen streaming enabled");
                                             screen_streaming_enabled = true;
 
-                                            // Initialize screen capture if not already done
-                                            if screen_capture.is_none() {
-                                                match ScreenCaptureService::new() {
-                                                    Ok(service) => {
-                                                        screen_capture = Some(service);
+                                            // Always re-initialize screen capture for fresh start
+                                            match ScreenCaptureService::new() {
+                                                Ok(service) => {
+                                                    screen_capture = Some(service);
 
-                                                        // Set capture dimensions if specified
-                                                        if let (Some(width), Some(height)) = (control.capture_width, control.capture_height) {
-                                                            if let Some(ref capture) = screen_capture {
-                                                                capture.set_capture_dimensions(width, height);
-                                                                info!("Capture dimensions set to {}x{}", width, height);
-                                                            }
+                                                    // Set capture dimensions if specified
+                                                    if let (Some(width), Some(height)) = (control.capture_width, control.capture_height) {
+                                                        if let Some(ref capture) = screen_capture {
+                                                            capture.set_capture_dimensions(width, height);
+                                                            info!("Capture dimensions set to {}x{}", width, height);
                                                         }
+                                                    }
 
-                                                        // Set max dimension for downscaling if specified
-                                                        if let Some(max_dim) = control.max_dimension {
-                                                            if let Some(ref capture) = screen_capture {
-                                                                capture.set_max_dimension(max_dim);
-                                                                info!("Max dimension set to {}", max_dim);
-                                                            }
+                                                    // Set max dimension for downscaling if specified
+                                                    if let Some(max_dim) = control.max_dimension {
+                                                        if let Some(ref capture) = screen_capture {
+                                                            capture.set_max_dimension(max_dim);
+                                                            info!("Max dimension set to {}", max_dim);
                                                         }
+                                                    }
 
-                                                        // Start screen streaming task
-                                                        let capture: Option<ScreenCaptureService> = screen_capture.clone();
-                                                        let tx = screen_tx.clone();
-                                                        screen_stream_handle = Some(tokio::spawn(async move {
-                                                            info!("Screen streaming task started, FPS: {}", SCREEN_STREAM_FPS);
-                                                            let mut interval = tokio::time::interval(
-                                                                tokio::time::Duration::from_millis(1000 / SCREEN_STREAM_FPS as u64)
-                                                            );
-                                                            let mut frame_count = 0u32;
-                                                            loop {
-                                                                interval.tick().await;
-                                                                frame_count += 1;
-                                                                if let Some(ref capture) = capture {
-                                                                    debug!("Screen streaming: capturing frame #{}", frame_count);
-                                                                    match capture.capture_around_cursor() {
-                                                                        Ok(frame) => {
-                                                                            debug!("Screen streaming: captured frame #{}: {}x{}", frame_count, frame.capture_width, frame.capture_height);
-                                                                            // Send screen frame directly (not wrapped in ProtocolMessage)
-                                                                            let screen_msg = serde_json::json!({
-                                                                                "type": "screen_frame",
-                                                                                "cursor_x": frame.cursor_x,
-                                                                                "cursor_y": frame.cursor_y,
-                                                                                "monitor_id": frame.monitor_id,
-                                                                                "capture_width": frame.capture_width,
-                                                                                "capture_height": frame.capture_height,
-                                                                                "data": frame.data,
-                                                                            });
-                                                                            match serde_json::to_string(&screen_msg) {
-                                                                                Ok(json) => {
-                                                                                    if tx.send(json).await.is_err() {
-                                                                                        error!("Screen streaming: failed to send frame #{} - channel closed", frame_count);
-                                                                                        break;
-                                                                                    }
-                                                                                    debug!("Screen streaming: sent frame #{}", frame_count);
+                                                    // Start screen streaming task
+                                                    let capture: Option<ScreenCaptureService> = screen_capture.clone();
+                                                    let tx = screen_tx.clone();
+                                                    screen_stream_handle = Some(tokio::spawn(async move {
+                                                        info!("Screen streaming task started, FPS: {}", SCREEN_STREAM_FPS);
+                                                        let mut interval = tokio::time::interval(
+                                                            tokio::time::Duration::from_millis(1000 / SCREEN_STREAM_FPS as u64)
+                                                        );
+                                                        let mut frame_count = 0u32;
+                                                        loop {
+                                                            interval.tick().await;
+                                                            frame_count += 1;
+                                                            if let Some(ref capture) = capture {
+                                                                debug!("Screen streaming: capturing frame #{}", frame_count);
+                                                                match capture.capture_around_cursor() {
+                                                                    Ok(frame) => {
+                                                                        debug!("Screen streaming: captured frame #{}: {}x{}", frame_count, frame.capture_width, frame.capture_height);
+                                                                        // Send screen frame directly (not wrapped in ProtocolMessage)
+                                                                        let screen_msg = serde_json::json!({
+                                                                            "type": "screen_frame",
+                                                                            "cursor_x": frame.cursor_x,
+                                                                            "cursor_y": frame.cursor_y,
+                                                                            "monitor_id": frame.monitor_id,
+                                                                            "capture_width": frame.capture_width,
+                                                                            "capture_height": frame.capture_height,
+                                                                            "data": frame.data,
+                                                                        });
+                                                                        match serde_json::to_string(&screen_msg) {
+                                                                            Ok(json) => {
+                                                                                if tx.send(json).await.is_err() {
+                                                                                    error!("Screen streaming: failed to send frame #{} - channel closed", frame_count);
+                                                                                    break;
                                                                                 }
-                                                                                Err(e) => error!("Screen streaming: failed to serialize frame #{}: {}", frame_count, e),
+                                                                                debug!("Screen streaming: sent frame #{}", frame_count);
                                                                             }
+                                                                            Err(e) => error!("Screen streaming: failed to serialize frame #{}: {}", frame_count, e),
                                                                         }
-                                                                        Err(e) => error!("Screen streaming: failed to capture frame #{}: {}", frame_count, e),
                                                                     }
-                                                                } else {
-                                                                    error!("Screen streaming: capture service is None!");
+                                                                    Err(e) => error!("Screen streaming: failed to capture frame #{}: {}", frame_count, e),
                                                                 }
+                                                            } else {
+                                                                error!("Screen streaming: capture service is None!");
                                                             }
-                                                        }));
-                                                    }
-                                                    Err(e) => {
-                                                        error!("Failed to initialize screen capture: {}", e);
-                                                        screen_streaming_enabled = false;
-                                                    }
+                                                        }
+                                                    }));
+                                                }
+                                                Err(e) => {
+                                                    error!("Failed to initialize screen capture: {}", e);
+                                                    screen_streaming_enabled = false;
                                                 }
                                             }
                                         } else if !control.enabled && screen_streaming_enabled {
@@ -469,7 +466,8 @@ fn handle_message(text: &str, command_tx: &broadcast::Sender<IncomingCommand>) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+    use std::time::Duration;
+
     fn create_test_config() -> WebSocketConfig {
         WebSocketConfig {
             host: "127.0.0.1".to_string(),

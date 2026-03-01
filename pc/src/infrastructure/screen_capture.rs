@@ -8,21 +8,25 @@ use std::sync::Mutex;
 use xcap::Monitor;
 use image::ImageFormat;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info};
 
 use crate::application::ports::{Result, Error};
 use crate::domain::entities::command::ScreenFrame;
 
 /// Default capture size (width and height in pixels)
+#[allow(dead_code)]
 const DEFAULT_CAPTURE_SIZE: u32 = 200;
 
 /// Minimum capture size
+#[allow(dead_code)]
 const MIN_CAPTURE_SIZE: u32 = 100;
 
 /// Maximum capture size
+#[allow(dead_code)]
 const MAX_CAPTURE_SIZE: u32 = 400;
 
 /// JPEG quality (0-100)
+#[allow(dead_code)]
 const JPEG_QUALITY: u8 = 75;
 
 /// Screen capture service
@@ -70,6 +74,8 @@ impl ScreenCaptureService {
             mouse_position::mouse_position::Mouse::Position { x, y } => (x, y),
             _ => (0, 0)
         };
+        
+        info!("Cursor virtual coordinates: ({}, {})", cursor_x, cursor_y);
 
         // Find which monitor contains cursor
         let monitors = Monitor::all().map_err(|e| {
@@ -87,6 +93,13 @@ impl ScreenCaptureService {
                 (cx >= mx) && (cx < mx + mw) && (cy >= my) && (cy < my + mh)
             })
             .unwrap_or(&monitors[0]);
+        
+        info!("Capturing from monitor {}: origin=({},{}) size={}x{}", 
+              monitor.id().unwrap_or(0), 
+              monitor.x().unwrap_or(0), 
+              monitor.y().unwrap_or(0),
+              monitor.width().unwrap_or(0), 
+              monitor.height().unwrap_or(0));
 
         // Calculate capture region (centered on cursor)
         let half_width = (capture_width / 2) as i32;
@@ -95,11 +108,15 @@ impl ScreenCaptureService {
         let monitor_y = monitor.y().unwrap_or(0) as i32;
         let monitor_w = monitor.width().unwrap_or(1920) as i32;
         let monitor_h = monitor.height().unwrap_or(1080) as i32;
-        
+
         let max_x = monitor_w - capture_width as i32;
         let max_y = monitor_h - capture_height as i32;
         let region_x = std::cmp::max(0, std::cmp::min(cursor_x as i32 - monitor_x - half_width, max_x));
         let region_y = std::cmp::max(0, std::cmp::min(cursor_y as i32 - monitor_y - half_height, max_y));
+        
+        info!("Capture region: ({},{}) size={}x{} (cursor offset from monitor: {},{})", 
+              region_x, region_y, capture_width, capture_height,
+              cursor_x as i32 - monitor_x, cursor_y as i32 - monitor_y);
 
         // Capture region
         let image = monitor.capture_region(
@@ -116,7 +133,7 @@ impl ScreenCaptureService {
         
         // Downscale if image is too large (server-side optimization)
         let final_image = if capture_width > max_dimension || capture_height > max_dimension {
-            let scale = (max_dimension as f32 / capture_width.max(capture_height) as f32);
+            let scale = max_dimension as f32 / capture_width.max(capture_height) as f32;
             let new_width = (capture_width as f32 * scale) as u32;
             let new_height = (capture_height as f32 * scale) as u32;
             debug!("Downscaling capture from {}x{} to {}x{}", capture_width, capture_height, new_width, new_height);

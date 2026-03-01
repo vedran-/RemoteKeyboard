@@ -4,7 +4,7 @@
 /// Automatically creates firewall rules to allow incoming connections.
 
 use std::process::Command;
-use tracing::{info, warn, error};
+use tracing::{info, warn};
 
 /// Firewall manager for Windows
 pub struct FirewallManager {

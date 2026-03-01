@@ -2,13 +2,49 @@
 
 **Date:** 2026-03-01  
 **Status:** MVP Complete ✅  
-**Test Coverage:** 119 tests passing (PC) + 99 tests passing (Mobile) = **218 total**  
+**Test Coverage:** 119 tests passing (PC) + 71 tests passing (Mobile) = **190 total**  
 
 ---
 
 ## 🎉 Latest Achievements
 
-### Protocol Audit Complete (2026-03-01) ✅
+### Screen Streaming - Complete Implementation (2026-03-01) ✅
+
+**Critical Bug Fixed:**
+- ✅ JPEG encoding error: RGBA → RGB conversion (xcap returns RGBA, JPEG doesn't support alpha)
+
+**Features Implemented:**
+- ✅ Server restart fix - streaming works multiple times per session
+- ✅ Flickering eliminated - cached decoded images with `ui.Image`
+- ✅ Debug logging for cursor coordinates and capture regions
+- ✅ PC build warnings fixed (10 warnings → 0 warnings)
+- ✅ GitHub release workflow updated to include `flutter_windows.dll`
+
+**Files Modified:**
+- `pc/src/infrastructure/screen_capture.rs` - RGBA→RGB conversion, debug logging
+- `pc/src/infrastructure/websocket/server.rs` - Fixed restart issue, removed unused imports
+- `mobile/lib/application/services/screen_stream_service.dart` - Image caching
+- `mobile/lib/presentation/screens/touchpad_screen.dart` - Use `RawImage` with cached image
+- `.github/workflows/release.yml` - Include flutter_windows.dll in releases
+
+**Test Results:**
+- ✅ 119 PC tests passing
+- ✅ 71 mobile tests passing
+- ✅ Total: 190 tests passing
+
+**How It Works Now:**
+1. Mobile sends screen control message with dimensions
+2. PC captures screen around cursor (with coordinate logging)
+3. RGBA image converted to RGB (fixes JPEG encoding)
+4. Image downscaled if needed (Triangle filter for speed)
+5. JPEG encoded and sent to mobile
+6. Mobile decodes image once, caches as `ui.Image`
+7. `RawImage` widget displays cached image (no flickering)
+8. Streaming can be stopped/started multiple times
+
+---
+
+### Protocol Audit Complete (Previous)
 
 **Comprehensive verification of ALL message types:**
 - ✅ Mouse commands (move, click, scroll)

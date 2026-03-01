@@ -101,11 +101,26 @@ jobs:
         Copy-Item $source $dest
         Write-Host "Renamed to: RemoteKeyboard-Client-${version}.exe"
 
+    - name: Copy flutter_windows.dll
+      run: |
+        $flutterDll = "mobile\build\windows\x64\runner\Release\flutter_windows.dll"
+        if (Test-Path $flutterDll) {
+          Copy-Item $flutterDll "mobile\build\windows\x64\runner\Release\flutter_windows.dll"
+          Write-Host "Copied flutter_windows.dll"
+        } else {
+          Write-Host "flutter_windows.dll not found, searching..."
+          Get-ChildItem -Path mobile\build -Recurse -Filter flutter_windows.dll | ForEach-Object {
+            Write-Host "Found: $($_.FullName)"
+          }
+        }
+
     - name: Upload Mobile Windows artifact
       uses: actions/upload-artifact@v4
       with:
         name: mobile-windows
-        path: mobile/build/windows/x64/runner/Release/RemoteKeyboard-Client-*.exe
+        path: |
+          mobile/build/windows/x64/runner/Release/RemoteKeyboard-Client-*.exe
+          mobile/build/windows/x64/runner/Release/flutter_windows.dll
         retention-days: 30
 
   # --------------------------------------------------------------------------
@@ -145,5 +160,6 @@ jobs:
         files: |
           ./artifacts/pc-server/RemoteKeyboard-Server-*.exe
           ./artifacts/mobile-windows/RemoteKeyboard-Client-*.exe
+          ./artifacts/mobile-windows/flutter_windows.dll
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
