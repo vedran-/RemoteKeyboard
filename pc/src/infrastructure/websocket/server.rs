@@ -243,29 +243,44 @@ async fn handle_connection(
                                                         let capture: Option<ScreenCaptureService> = screen_capture.clone();
                                                         let tx = screen_tx.clone();
                                                         screen_stream_handle = Some(tokio::spawn(async move {
+                                                            info!("Screen streaming task started, FPS: {}", SCREEN_STREAM_FPS);
                                                             let mut interval = tokio::time::interval(
                                                                 tokio::time::Duration::from_millis(1000 / SCREEN_STREAM_FPS as u64)
                                                             );
+                                                            let mut frame_count = 0u32;
                                                             loop {
                                                                 interval.tick().await;
+                                                                frame_count += 1;
                                                                 if let Some(ref capture) = capture {
-                                                                    if let Ok(frame) = capture.capture_around_cursor() {
-                                                                        // Send screen frame directly (not wrapped in ProtocolMessage)
-                                                                        let screen_msg = serde_json::json!({
-                                                                            "type": "screen_frame",
-                                                                            "cursor_x": frame.cursor_x,
-                                                                            "cursor_y": frame.cursor_y,
-                                                                            "monitor_id": frame.monitor_id,
-                                                                            "capture_width": frame.capture_width,
-                                                                            "capture_height": frame.capture_height,
-                                                                            "data": frame.data,
-                                                                        });
-                                                                        if let Ok(json) = serde_json::to_string(&screen_msg) {
-                                                                            if tx.send(json).await.is_err() {
-                                                                                break;
+                                                                    debug!("Screen streaming: capturing frame #{}", frame_count);
+                                                                    match capture.capture_around_cursor() {
+                                                                        Ok(frame) => {
+                                                                            debug!("Screen streaming: captured frame #{}: {}x{}", frame_count, frame.capture_width, frame.capture_height);
+                                                                            // Send screen frame directly (not wrapped in ProtocolMessage)
+                                                                            let screen_msg = serde_json::json!({
+                                                                                "type": "screen_frame",
+                                                                                "cursor_x": frame.cursor_x,
+                                                                                "cursor_y": frame.cursor_y,
+                                                                                "monitor_id": frame.monitor_id,
+                                                                                "capture_width": frame.capture_width,
+                                                                                "capture_height": frame.capture_height,
+                                                                                "data": frame.data,
+                                                                            });
+                                                                            match serde_json::to_string(&screen_msg) {
+                                                                                Ok(json) => {
+                                                                                    if tx.send(json).await.is_err() {
+                                                                                        error!("Screen streaming: failed to send frame #{} - channel closed", frame_count);
+                                                                                        break;
+                                                                                    }
+                                                                                    debug!("Screen streaming: sent frame #{}", frame_count);
+                                                                                }
+                                                                                Err(e) => error!("Screen streaming: failed to serialize frame #{}: {}", frame_count, e),
                                                                             }
                                                                         }
+                                                                        Err(e) => error!("Screen streaming: failed to capture frame #{}: {}", frame_count, e),
                                                                     }
+                                                                } else {
+                                                                    error!("Screen streaming: capture service is None!");
                                                                 }
                                                             }
                                                         }));

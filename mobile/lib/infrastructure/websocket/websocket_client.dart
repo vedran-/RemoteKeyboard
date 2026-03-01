@@ -119,6 +119,7 @@ class WebSocketClient {
   /// Handle incoming message from PC
   void _handleMessage(Map<String, dynamic> message) {
     final type = message['type'] as String?;
+    print('[WebSocket] Received message type: $type');
 
     switch (type) {
       case 'connection_accepted':
@@ -139,8 +140,15 @@ class WebSocketClient {
         _sendHeartbeatAck(message['timestamp'] as int?);
         break;
 
+      case 'screen_frame':
+        // Screen frames - forward to message stream for ScreenStreamService
+        print('[WebSocket] Received screen frame, forwarding to listeners');
+        _messageController.add(message);
+        break;
+
       default:
         // Forward other messages to listeners
+        print('[WebSocket] Forwarding message to listeners: $type');
         _messageController.add(message);
         break;
     }

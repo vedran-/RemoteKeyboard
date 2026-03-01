@@ -76,25 +76,40 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
   }
 
   void _toggleScreenStreaming() {
+    print('[Touchpad] Toggle button pressed! isStreaming: ${widget.screenStreamService.isStreaming}');
     if (widget.screenStreamService.isStreaming) {
       widget.screenStreamService.stopStreaming();
       widget.notificationService.info(context, 'Screen streaming stopped');
+      print('[Touchpad] Stopped streaming');
     } else {
       // Calculate ideal capture dimensions based on touchpad area
       // Get the touchpad container size (approximately)
       final touchpadWidth = MediaQuery.of(context).size.width * 0.85;
       final touchpadHeight = MediaQuery.of(context).size.height * 0.5;
-      
+
       // Request capture size matching touchpad aspect ratio
       final captureWidth = touchpadWidth.round().clamp(200, 600);
       final captureHeight = touchpadHeight.round().clamp(200, 600);
-      
+
       widget.screenStreamService.startStreaming(
         captureWidth: captureWidth,
         captureHeight: captureHeight,
         maxDimension: 400,  // Server will downscale if larger
       );
       widget.notificationService.info(context, 'Screen streaming started (${captureWidth}x$captureHeight)');
+      print('[Touchpad] Started streaming: ${captureWidth}x$captureHeight');
+      
+      // TEST: Show immediate notification to verify service is working
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted && widget.screenStreamService.isStreaming) {
+          print('[Touchpad] TEST: Service still streaming after 2s: ${widget.screenStreamService.isStreaming}');
+          print('[Touchpad] TEST: Current frame: ${widget.screenStreamService.currentFrame != null}');
+          widget.notificationService.info(
+            context, 
+            'Still streaming... Frame: ${widget.screenStreamService.currentFrame != null ? "YES" : "NO"}'
+          );
+        }
+      });
     }
   }
 
@@ -166,6 +181,18 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
                 final screenFrame = widget.screenStreamService.currentFrame;
                 final isStreaming = widget.screenStreamService.isStreaming;
 
+                // Debug logging
+                print('[Touchpad] isStreaming: $isStreaming, hasFrame: ${screenFrame != null}');
+                if (screenFrame != null) {
+                  print('[Touchpad] Frame size: ${screenFrame.captureWidth}x${screenFrame.captureHeight}, data length: ${screenFrame.data.length}');
+                  try {
+                    final imageData = base64Decode(screenFrame.data);
+                    print('[Touchpad] Decoded image: ${imageData.length} bytes');
+                  } catch (e) {
+                    print('[Touchpad] ERROR decoding image: $e');
+                  }
+                }
+
                 return GestureDetector(
                   onPanUpdate: _handlePanUpdate,
                   onTap: _handleTap,
@@ -187,15 +214,71 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        // Screen capture background (if streaming)
+                        // TEST PLACEHOLDER - Shows when streaming to verify UI updates
+                        if (isStreaming)
+                          Container(
+                            color: Colors.blue.withOpacity(0.3),
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.screen_share,
+                                    size: 64,
+                                    color: Colors.blue,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'STREAMING ACTIVE',
+                                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                      color: Colors.blue,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Frame: ${screenFrame != null ? "RECEIVED ✓" : "Waiting..."}',
+                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      color: screenFrame != null ? Colors.green : Colors.orange,
+                                    ),
+                                  ),
+                                  if (screenFrame != null) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      '${screenFrame.captureWidth}x${screenFrame.captureHeight}',
+                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        
+                        // Screen capture image (if streaming and frame received)
                         if (isStreaming && screenFrame != null)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(14),
-                            child: Image.memory(
-                              base64Decode(screenFrame.data),
-                              fit: BoxFit.contain,  // Respect aspect ratio
-                              color: Colors.black,  // Letterbox color
-                              colorBlendMode: BlendMode.src,
+                          Container(
+                            color: Colors.black,  // Background color for letterboxing
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: Image.memory(
+                                base64Decode(screenFrame.data),
+                                fit: BoxFit.contain,  // Respect aspect ratio
+                                errorBuilder: (context, error, stackTrace) {
+                                  print('[Touchpad] Image error: $error');
+                                  return Container(
+                                    color: Colors.red,
+                                    child: Center(
+                                      child: Text(
+                                        'Image Error: $error',
+                                        style: const TextStyle(color: Colors.white),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
                           ),
                         // Overlay for touch controls

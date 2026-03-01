@@ -111,16 +111,18 @@ impl ScreenCaptureService {
             Error::input(format!("Failed to capture screen: {}", e))
         })?;
 
+        // Convert to RGB (JPEG doesn't support alpha channel)
+        let rgb_image = image::DynamicImage::ImageRgba8(image).into_rgb8();
+        
         // Downscale if image is too large (server-side optimization)
-        // Using Triangle (bilinear) filter for speed - 4x faster than Lanczos3
         let final_image = if capture_width > max_dimension || capture_height > max_dimension {
             let scale = (max_dimension as f32 / capture_width.max(capture_height) as f32);
             let new_width = (capture_width as f32 * scale) as u32;
             let new_height = (capture_height as f32 * scale) as u32;
             debug!("Downscaling capture from {}x{} to {}x{}", capture_width, capture_height, new_width, new_height);
-            image::imageops::resize(&image, new_width, new_height, image::imageops::FilterType::Triangle)
+            image::imageops::resize(&rgb_image, new_width, new_height, image::imageops::FilterType::Triangle)
         } else {
-            image
+            rgb_image
         };
 
         // Convert to JPEG

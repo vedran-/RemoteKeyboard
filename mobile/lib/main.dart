@@ -25,7 +25,17 @@ class RemoteKeyboardApp extends StatelessWidget {
       connectionService,
     );
     final notificationService = NotificationService();
-    final screenStreamService = ScreenStreamService(connectionService.client);
+    final screenStreamService = ScreenStreamService(
+      connectionService.client,
+      onError: (message, {String? title, bool isError = false}) {
+        // Show error as notification
+        if (isError) {
+          notificationService.error(context, message);
+        } else {
+          notificationService.info(context, message);
+        }
+      },
+    );
 
     return MaterialApp(
       title: 'RemoteKeyboard',

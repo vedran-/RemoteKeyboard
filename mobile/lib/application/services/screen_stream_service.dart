@@ -17,6 +17,7 @@ typedef ScreenFrameCallback = void Function(ScreenFrame frame);
 /// Service for managing screen streaming from PC
 class ScreenStreamService extends ChangeNotifier {
   final WebSocketClient _client;
+  final void Function(String message, {String? title, bool isError})? onError;
   
   ScreenFrame? _currentFrame;
   bool _isStreaming = false;
@@ -37,7 +38,7 @@ class ScreenStreamService extends ChangeNotifier {
   /// Current capture height
   int get captureHeight => _captureHeight;
 
-  ScreenStreamService(this._client);
+  ScreenStreamService(this._client, {this.onError});
 
   /// Start screen streaming with optional dimensions
   void startStreaming({
@@ -45,7 +46,11 @@ class ScreenStreamService extends ChangeNotifier {
     int? captureHeight,
     int? maxDimension,
   }) {
-    if (_isStreaming) return;
+    if (_isStreaming) {
+      debugPrint('[ScreenStream] Already streaming, ignoring start request');
+      onError?.call('Already streaming', title: 'Screen Stream', isError: false);
+      return;
+    }
 
     _isStreaming = true;
     _captureWidth = captureWidth ?? 200;
@@ -57,14 +62,21 @@ class ScreenStreamService extends ChangeNotifier {
 
     // Listen for screen frames
     _messageSubscription = _client.messages.listen((message) {
+      debugPrint('[ScreenStream] Received message in listener: ${message['type']}');
       // Screen frames are sent directly with type 'screen_frame'
       if (message['type'] == 'screen_frame') {
+        debugPrint('[ScreenStream] Found screen_frame, handling it');
         _handleScreenFrame(message);
       }
+    }, onError: (error) {
+      final errorMsg = 'Error receiving screen frames: $error';
+      print('[ScreenStream] ERROR: $errorMsg');
+      onError?.call(errorMsg, title: 'Screen Stream Error', isError: true);
     });
 
     notifyListeners();
     debugPrint('[ScreenStream] Streaming started at ${_captureWidth}x${_captureHeight}');
+    onError?.call('Screen streaming started', title: 'Screen Stream', isError: false);
   }
 
   /// Stop screen streaming
@@ -122,14 +134,34 @@ class ScreenStreamService extends ChangeNotifier {
   /// Handle incoming screen frame
   void _handleScreenFrame(Map<String, dynamic> payload) {
     try {
+      print('[ScreenStream] Parsing screen frame...');
       _currentFrame = ScreenFrame.fromJson(payload);
+      print('[ScreenStream] Frame parsed successfully: ${_currentFrame!.captureWidth}x${_currentFrame!.captureHeight}');
+      
+      // Verify data is valid base64
+      try {
+        final decoded = base64Decode(_currentFrame!.data);
+        print('[ScreenStream] Base64 decoded: ${decoded.length} bytes');
+        
+        if (decoded.isEmpty) {
+          throw Exception('Image data is empty');
+        }
+      } catch (e) {
+        final errorMsg = 'Invalid image data: $e';
+        print('[ScreenStream] ERROR: $errorMsg');
+        onError?.call(errorMsg, title: 'Screen Stream Error', isError: true);
+        return;
+      }
+      
       notifyListeners();
       debugPrint(
         '[ScreenStream] Frame received: ${_currentFrame!.captureWidth}x${_currentFrame!.captureHeight}, '
         'cursor: (${_currentFrame!.cursorX}, ${_currentFrame!.cursorY})'
       );
     } catch (e) {
-      debugPrint('[ScreenStream] Error parsing screen frame: $e');
+      final errorMsg = 'Failed to parse screen frame: $e';
+      print('[ScreenStream] ERROR: $errorMsg');
+      onError?.call(errorMsg, title: 'Screen Stream Error', isError: true);
     }
   }
 
