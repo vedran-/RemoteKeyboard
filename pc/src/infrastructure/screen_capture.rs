@@ -12,7 +12,6 @@ use tracing::{debug, error, info};
 
 use crate::application::ports::{Result, Error};
 use crate::domain::entities::command::ScreenFrame;
-use crate::infrastructure::cursor::get_physical_cursor_position;
 
 /// Default capture size (width and height in pixels)
 #[allow(dead_code)]
@@ -71,59 +70,37 @@ impl ScreenCaptureService {
         })?;
 
         // Get cursor position in physical screen coordinates
-        let (cursor_x, cursor_y) = match get_physical_cursor_position() {
-            Ok(pos) => {
-                info!("Physical cursor position ({}): ({}, {})", 
-                      crate::infrastructure::cursor::get_platform_name(), 
-                      pos.0, pos.1);
-                pos
+        let (monitor, cursor_x, cursor_y) = match crate::infrastructure::cursor::get_physical_cursor_position() {
+            Some((monitor, x, y)) => {
+                info!("Physical cursor on monitor {}: ({}, {})", 
+                      monitor.id().unwrap_or(0), x, y);
+                (monitor, x, y)
             }
-            Err(e) => {
-                error!("Failed to get cursor position: {}", e);
-                (0, 0)
+            None => {
+                error!("Failed to get cursor position");
+                return Err(Error::input("Failed to get cursor position".to_string()));
             }
         };
 
-        // Find which monitor contains cursor
-        let monitors = Monitor::all().map_err(|e| {
-            Error::input(format!("Failed to get monitors: {}", e))
-        })?;
-
-        let monitor = monitors.iter()
-            .find(|m| {
-                let mx = m.x().unwrap_or(0) as i32;
-                let my = m.y().unwrap_or(0) as i32;
-                let mw = m.width().unwrap_or(1920) as i32;
-                let mh = m.height().unwrap_or(1080) as i32;
-                let cx = cursor_x as i32;
-                let cy = cursor_y as i32;
-                (cx >= mx) && (cx < mx + mw) && (cy >= my) && (cy < my + mh)
-            })
-            .unwrap_or(&monitors[0]);
-        
-        info!("Capturing from monitor {}: origin=({},{}) size={}x{}", 
-              monitor.id().unwrap_or(0), 
-              monitor.x().unwrap_or(0), 
-              monitor.y().unwrap_or(0),
-              monitor.width().unwrap_or(0), 
-              monitor.height().unwrap_or(0));
-
         // Calculate capture region (centered on cursor)
+        // cursor_x and cursor_y are already relative to monitor (physical pixels)
         let half_width = (capture_width / 2) as i32;
         let half_height = (capture_height / 2) as i32;
-        let monitor_x = monitor.x().unwrap_or(0) as i32;
-        let monitor_y = monitor.y().unwrap_or(0) as i32;
-        let monitor_w = monitor.width().unwrap_or(1920) as i32;
-        let monitor_h = monitor.height().unwrap_or(1080) as i32;
+        let monitor_width = monitor.width().map_err(|e| {
+            Error::input(format!("Failed to get monitor width: {}", e))
+        })? as i32;
+        let monitor_height = monitor.height().map_err(|e| {
+            Error::input(format!("Failed to get monitor height: {}", e))
+        })? as i32;
 
-        let max_x = monitor_w - capture_width as i32;
-        let max_y = monitor_h - capture_height as i32;
-        let region_x = std::cmp::max(0, std::cmp::min(cursor_x as i32 - monitor_x - half_width, max_x));
-        let region_y = std::cmp::max(0, std::cmp::min(cursor_y as i32 - monitor_y - half_height, max_y));
+        // Center region on cursor, then clamp to monitor bounds
+        let max_x = (monitor_width - capture_width as i32).max(0);
+        let max_y = (monitor_height - capture_height as i32).max(0);
+        let region_x = (cursor_x - half_width).clamp(0, max_x);
+        let region_y = (cursor_y - half_height).clamp(0, max_y);
         
-        info!("Capture region: ({},{}) size={}x{} (cursor offset from monitor: {},{})", 
-              region_x, region_y, capture_width, capture_height,
-              cursor_x as i32 - monitor_x, cursor_y as i32 - monitor_y);
+        info!("Capture region: ({},{}) size={}x{} (cursor at physical: {},{})", 
+              region_x, region_y, capture_width, capture_height, cursor_x, cursor_y);
 
         // Capture region
         let image = monitor.capture_region(

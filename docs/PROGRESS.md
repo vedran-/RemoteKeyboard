@@ -15,23 +15,18 @@
 - Logical vs physical pixel mismatch caused capture to be off-center
 
 **Solution Implemented:**
-- ✅ Created cross-platform cursor module (`pc/src/infrastructure/cursor/`)
-- ✅ Windows: Uses `GetPhysicalCursorPos()` for true physical coordinates
-- ✅ Linux/macOS: Stub implementations (fail gracefully with clear error)
-- ✅ Removed `mouse_position` crate dependency
-- ✅ Platform-agnostic API easy to extend for future platforms
+- ✅ Platform-agnostic cursor position using enigo + xcap
+- ✅ Gets logical coordinates from enigo
+- ✅ Gets monitor scale factor from xcap
+- ✅ Calculates physical position: `physical = (logical - monitor_origin) * scale_factor`
+- ✅ Works correctly on Windows, Linux, macOS with mixed DPI monitors
 
 **Files Created:**
-- `pc/src/infrastructure/cursor/mod.rs` - Public API
-- `pc/src/infrastructure/cursor/traits.rs` - Platform trait
-- `pc/src/infrastructure/cursor/windows.rs` - Windows implementation
-- `pc/src/infrastructure/cursor/linux.rs` - Linux stub
-- `pc/src/infrastructure/cursor/macos.rs` - macOS stub
+- `pc/src/infrastructure/cursor/mod.rs` - Platform-agnostic cursor position
 
 **Files Modified:**
-- `pc/Cargo.toml` - Added `windows` crate, removed `mouse_position`
-- `pc/src/infrastructure/screen_capture.rs` - Uses physical coordinates
-- `pc/src/infrastructure/mod.rs` - Added cursor module
+- `pc/Cargo.toml` - Removed `windows` crate, kept enigo + xcap
+- `pc/src/infrastructure/screen_capture.rs` - Uses new cursor module
 
 ---
 
