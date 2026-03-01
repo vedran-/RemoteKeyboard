@@ -4,6 +4,7 @@
 /// Can display screen capture from PC when streaming is enabled.
 
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 
@@ -85,21 +86,43 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
       widget.notificationService.info(context, 'Screen streaming stopped');
     } else {
       // Use actual touchpad container dimensions if available
-      int captureWidth, captureHeight;
-      
+      double width, height;
+
       if (_touchpadWidth != null && _touchpadHeight != null) {
         // Use actual measured dimensions
-        captureWidth = _touchpadWidth!.round().clamp(200, 800);
-        captureHeight = _touchpadHeight!.round().clamp(200, 800);
-        print('[Touchpad] Using measured dimensions: ${captureWidth}x$captureHeight');
+        width = _touchpadWidth!;
+        height = _touchpadHeight!;
       } else {
         // Fallback to estimated dimensions
         final screenWidth = MediaQuery.of(context).size.width;
         final screenHeight = MediaQuery.of(context).size.height;
-        captureWidth = (screenWidth * 0.85).round().clamp(200, 800);
-        captureHeight = (screenHeight * 0.35).round().clamp(200, 800);
-        print('[Touchpad] Using fallback dimensions: ${captureWidth}x$captureHeight');
+        width = screenWidth * 0.85;
+        height = screenHeight * 0.35;
       }
+
+      // Clamp to max/min dimensions while maintaining aspect ratio
+      const maxDimension = 800.0;
+      const minDimension = 200.0;
+
+      if (width > maxDimension || height > maxDimension) {
+        // Scale down proportionally
+        final scale = maxDimension / max(width, height);
+        width *= scale;
+        height *= scale;
+      }
+
+      if (width < minDimension || height < minDimension) {
+        // Scale up proportionally (if too small)
+        final scale = minDimension / min(width, height);
+        width *= scale;
+        height *= scale;
+      }
+
+      final captureWidth = width.round();
+      final captureHeight = height.round();
+
+      print('[Touchpad] Container: ${_touchpadWidth?.toStringAsFixed(0) ?? '?'}x${_touchpadHeight?.toStringAsFixed(0) ?? '?'} (aspect: ${_touchpadWidth != null && _touchpadHeight != null ? (_touchpadWidth! / _touchpadHeight!).toStringAsFixed(2) : '?'}:1)');
+      print('[Touchpad] Requested: ${captureWidth}x$captureHeight (aspect: ${(captureWidth / captureHeight).toStringAsFixed(2)}:1)');
 
       widget.screenStreamService.startStreaming(
         captureWidth: captureWidth,
@@ -226,9 +249,8 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
                                   borderRadius: BorderRadius.circular(14),
                                   child: RawImage(
                                     image: widget.screenStreamService.decodedImage,  // Use cached decoded image
-                                    fit: BoxFit.contain,  // Respect aspect ratio
-                                    width: screenFrame.captureWidth.toDouble(),
-                                    height: screenFrame.captureHeight.toDouble(),
+                                    fit: BoxFit.contain,  // Respect aspect ratio, scale to fit
+                                    // No explicit width/height - let parent container control sizing
                                   ),
                                 ),
                               ),
@@ -263,15 +285,15 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
                             // Server always centers cursor in capture, so red dot is always in middle
                             if (isStreaming && screenFrame != null)
                               Positioned(
-                                left: screenFrame.captureWidth / 2 - 10,  // Center X (minus half dot size)
-                                top: screenFrame.captureHeight / 2 - 10,  // Center Y
+                                left: (screenFrame.captureWidth.toDouble() - 7) / 2,  // True center X
+                                top: (screenFrame.captureHeight.toDouble() - 7) / 2,  // True center Y
                                 child: Container(
-                                  width: 20,
-                                  height: 20,
+                                  width: 7,    // Reduced from 20 for less obstruction
+                                  height: 7,
                                   decoration: BoxDecoration(
                                     color: Colors.red.withOpacity(0.7),
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 2),
+                                    border: Border.all(color: Colors.white, width: 1),
                                   ),
                                 ),
                               ),

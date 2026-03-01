@@ -14,6 +14,7 @@ REM   build_run.bat run-pc       - Run PC server
 REM   build_run.bat run-win      - Run Windows client
 REM   build_run.bat run-both     - Run PC server + Windows client
 REM   build_run.bat build-run-all - Build all + Run both (PC + Windows)
+REM   build_run.bat debug-client - Run Windows client in debug mode (flutter run -d windows)
 REM   build_run.bat test-server  - Run Python test server (for debugging)
 REM   build_run.bat clean        - Clean all builds
 REM ============================================================================
@@ -30,6 +31,7 @@ if "%1"=="run-pc" goto :run_pc
 if "%1"=="run-win" goto :run_win
 if "%1"=="run-both" goto :run_both
 if "%1"=="build-run-all" goto :build_and_run_all
+if "%1"=="debug-client" goto :debug_client
 if "%1"=="test-server" goto :test_server
 if "%1"=="clean" goto :clean
 
@@ -52,6 +54,7 @@ echo   build_run.bat run-pc       - Run PC server
 echo   build_run.bat run-win      - Run Windows client
 echo   build_run.bat run-both     - Run PC server + Windows client
 echo   build_run.bat build-run-all - Build all + Run both (PC + Windows)
+echo   build_run.bat debug-client - Run Windows client in debug mode (flutter run -d windows)
 echo   build_run.bat test-server  - Run Python test server (for debugging)
 echo   build_run.bat clean        - Clean all builds
 echo.
@@ -126,6 +129,19 @@ goto :eof
 :build_and_run_all
 call :build_all
 call :run_both
+goto :eof
+
+:debug_client
+echo.
+echo Starting Windows Client in Debug Mode...
+echo ============================================
+echo Running Flutter with hot reload enabled.
+echo Press 'r' to restart, 'q' to quit.
+echo ============================================
+echo.
+cd mobile
+call flutter run -d windows
+cd ..
 goto :eof
 
 :run_pc
