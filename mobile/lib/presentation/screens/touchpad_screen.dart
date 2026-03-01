@@ -30,6 +30,10 @@ class TouchpadScreen extends StatefulWidget {
 
 class _TouchpadScreenState extends State<TouchpadScreen> {
   String _sensitivityLevel = 'Normal';
+  
+  // Store touchpad container dimensions for screen streaming
+  double? _touchpadWidth;
+  double? _touchpadHeight;
 
   double get _sensitivity {
     switch (_sensitivityLevel.toLowerCase()) {
@@ -80,14 +84,22 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
       widget.screenStreamService.stopStreaming();
       widget.notificationService.info(context, 'Screen streaming stopped');
     } else {
-      // Calculate ideal capture dimensions based on touchpad area
-      // Get the touchpad container size (approximately)
-      final touchpadWidth = MediaQuery.of(context).size.width * 0.85;
-      final touchpadHeight = MediaQuery.of(context).size.height * 0.5;
-
-      // Request capture size matching touchpad aspect ratio
-      final captureWidth = touchpadWidth.round().clamp(200, 600);
-      final captureHeight = touchpadHeight.round().clamp(200, 600);
+      // Use actual touchpad container dimensions if available
+      int captureWidth, captureHeight;
+      
+      if (_touchpadWidth != null && _touchpadHeight != null) {
+        // Use actual measured dimensions
+        captureWidth = _touchpadWidth!.round().clamp(200, 800);
+        captureHeight = _touchpadHeight!.round().clamp(200, 800);
+        print('[Touchpad] Using measured dimensions: ${captureWidth}x$captureHeight');
+      } else {
+        // Fallback to estimated dimensions
+        final screenWidth = MediaQuery.of(context).size.width;
+        final screenHeight = MediaQuery.of(context).size.height;
+        captureWidth = (screenWidth * 0.85).round().clamp(200, 800);
+        captureHeight = (screenHeight * 0.35).round().clamp(200, 800);
+        print('[Touchpad] Using fallback dimensions: ${captureWidth}x$captureHeight');
+      }
 
       widget.screenStreamService.startStreaming(
         captureWidth: captureWidth,
@@ -160,104 +172,113 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
 
           // Touchpad area with optional screen capture
           Expanded(
-            child: ListenableBuilder(
-              listenable: widget.screenStreamService,
-              builder: (context, _) {
-                final screenFrame = widget.screenStreamService.currentFrame;
-                final isStreaming = widget.screenStreamService.isStreaming;
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Measure actual touchpad container size (minus margins)
+                _touchpadWidth = constraints.maxWidth - 32; // 16px margin on each side
+                _touchpadHeight = constraints.maxHeight - 32;
+                
+                return ListenableBuilder(
+                  listenable: widget.screenStreamService,
+                  builder: (context, _) {
+                    final screenFrame = widget.screenStreamService.currentFrame;
+                    final isStreaming = widget.screenStreamService.isStreaming;
 
-                // Debug logging
-                print('[Touchpad] isStreaming: $isStreaming, hasFrame: ${screenFrame != null}');
-                if (screenFrame != null) {
-                  print('[Touchpad] Frame size: ${screenFrame.captureWidth}x${screenFrame.captureHeight}, data length: ${screenFrame.data.length}');
-                  try {
-                    final imageData = base64Decode(screenFrame.data);
-                    print('[Touchpad] Decoded image: ${imageData.length} bytes');
-                  } catch (e) {
-                    print('[Touchpad] ERROR decoding image: $e');
-                  }
-                }
+                    // Debug logging
+                    print('[Touchpad] Container size: ${_touchpadWidth}x${_touchpadHeight}');
+                    print('[Touchpad] isStreaming: $isStreaming, hasFrame: ${screenFrame != null}');
+                    if (screenFrame != null) {
+                      print('[Touchpad] Frame size: ${screenFrame.captureWidth}x${screenFrame.captureHeight}, data length: ${screenFrame.data.length}');
+                      try {
+                        final imageData = base64Decode(screenFrame.data);
+                        print('[Touchpad] Decoded image: ${imageData.length} bytes');
+                      } catch (e) {
+                        print('[Touchpad] ERROR decoding image: $e');
+                      }
+                    }
 
-                return GestureDetector(
-                  onPanUpdate: _handlePanUpdate,
-                  onTap: _handleTap,
-                  onSecondaryTap: _handleSecondaryTap,
-                  child: Container(
-                    margin: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDisconnected
-                          ? Theme.of(context).colorScheme.surfaceContainerHighest
-                          : Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDisconnected
-                            ? Theme.of(context).colorScheme.outlineVariant
-                            : Theme.of(context).colorScheme.primary,
-                        width: 2,
+                    return GestureDetector(
+                      onPanUpdate: _handlePanUpdate,
+                      onTap: _handleTap,
+                      onSecondaryTap: _handleSecondaryTap,
+                      child: Container(
+                        margin: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isDisconnected
+                              ? Theme.of(context).colorScheme.surfaceContainerHighest
+                              : Theme.of(context).colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isDisconnected
+                                ? Theme.of(context).colorScheme.outlineVariant
+                                : Theme.of(context).colorScheme.primary,
+                            width: 2,
+                          ),
+                        ),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            // Screen capture image (if streaming and frame received)
+                            if (isStreaming && screenFrame != null && widget.screenStreamService.decodedImage != null)
+                              Container(
+                                color: Colors.black,  // Background color for letterboxing
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: RawImage(
+                                    image: widget.screenStreamService.decodedImage,  // Use cached decoded image
+                                    fit: BoxFit.contain,  // Respect aspect ratio
+                                    width: screenFrame.captureWidth.toDouble(),
+                                    height: screenFrame.captureHeight.toDouble(),
+                                  ),
+                                ),
+                              ),
+                            // Overlay for touch controls
+                            if (!isStreaming)
+                              Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.touch_app,
+                                      size: 64,
+                                      color: isDisconnected
+                                          ? Theme.of(context).colorScheme.onSurfaceVariant
+                                          : Theme.of(context).colorScheme.primary,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      isDisconnected
+                                          ? 'Connect to PC first'
+                                          : 'Touch and drag to move cursor',
+                                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                            color: isDisconnected
+                                                ? Theme.of(context).colorScheme.onSurfaceVariant
+                                                : Theme.of(context).colorScheme.onPrimaryContainer,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            // Cursor indicator (if streaming)
+                            if (isStreaming && screenFrame != null)
+                              Positioned(
+                                left: screenFrame.cursorX.toDouble() % screenFrame.captureWidth,
+                                top: screenFrame.cursorY.toDouble() % screenFrame.captureHeight,
+                                child: Container(
+                                  width: 20,
+                                  height: 20,
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withOpacity(0.7),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 2),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        // Screen capture image (if streaming and frame received)
-                        if (isStreaming && screenFrame != null && widget.screenStreamService.decodedImage != null)
-                          Container(
-                            color: Colors.black,  // Background color for letterboxing
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(14),
-                              child: RawImage(
-                                image: widget.screenStreamService.decodedImage,  // Use cached decoded image
-                                fit: BoxFit.contain,  // Respect aspect ratio
-                                width: screenFrame.captureWidth.toDouble(),
-                                height: screenFrame.captureHeight.toDouble(),
-                              ),
-                            ),
-                          ),
-                        // Overlay for touch controls
-                        if (!isStreaming)
-                          Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.touch_app,
-                                  size: 64,
-                                  color: isDisconnected
-                                      ? Theme.of(context).colorScheme.onSurfaceVariant
-                                      : Theme.of(context).colorScheme.primary,
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  isDisconnected
-                                      ? 'Connect to PC first'
-                                      : 'Touch and drag to move cursor',
-                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                        color: isDisconnected
-                                            ? Theme.of(context).colorScheme.onSurfaceVariant
-                                            : Theme.of(context).colorScheme.onPrimaryContainer,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        // Cursor indicator (if streaming)
-                        if (isStreaming && screenFrame != null)
-                          Positioned(
-                            left: screenFrame.cursorX.toDouble() % screenFrame.captureWidth,
-                            top: screenFrame.cursorY.toDouble() % screenFrame.captureHeight,
-                            child: Container(
-                              width: 20,
-                              height: 20,
-                              decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.7),
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
+                    );
+                  },
                 );
               },
             ),

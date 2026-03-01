@@ -12,6 +12,7 @@ use tracing::{debug, error, info};
 
 use crate::application::ports::{Result, Error};
 use crate::domain::entities::command::ScreenFrame;
+use crate::infrastructure::cursor::get_physical_cursor_position;
 
 /// Default capture size (width and height in pixels)
 #[allow(dead_code)]
@@ -69,13 +70,19 @@ impl ScreenCaptureService {
             Error::internal(format!("Mutex poisoned: {}", e))
         })?;
 
-        // Get cursor position (virtual screen coordinates)
-        let (cursor_x, cursor_y) = match mouse_position::mouse_position::Mouse::get_mouse_position() {
-            mouse_position::mouse_position::Mouse::Position { x, y } => (x, y),
-            _ => (0, 0)
+        // Get cursor position in physical screen coordinates
+        let (cursor_x, cursor_y) = match get_physical_cursor_position() {
+            Ok(pos) => {
+                info!("Physical cursor position ({}): ({}, {})", 
+                      crate::infrastructure::cursor::get_platform_name(), 
+                      pos.0, pos.1);
+                pos
+            }
+            Err(e) => {
+                error!("Failed to get cursor position: {}", e);
+                (0, 0)
+            }
         };
-        
-        info!("Cursor virtual coordinates: ({}, {})", cursor_x, cursor_y);
 
         // Find which monitor contains cursor
         let monitors = Monitor::all().map_err(|e| {

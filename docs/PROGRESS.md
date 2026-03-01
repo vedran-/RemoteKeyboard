@@ -2,13 +2,57 @@
 
 **Date:** 2026-03-01  
 **Status:** MVP Complete ✅  
-**Test Coverage:** 119 tests passing (PC) + 71 tests passing (Mobile) = **190 total**  
+**Test Coverage:** 110 tests passing (PC) + 71 tests passing (Mobile) = **181 total**  
 
 ---
 
 ## 🎉 Latest Achievements
 
-### Screen Streaming - Complete Implementation (2026-03-01) ✅
+### Physical Cursor Coordinates for Multi-Monitor (2026-03-01) ✅
+
+**Problem Fixed:**
+- Cursor offset on multi-monitor setups with different DPI scaling (4K + 2K)
+- Logical vs physical pixel mismatch caused capture to be off-center
+
+**Solution Implemented:**
+- ✅ Created cross-platform cursor module (`pc/src/infrastructure/cursor/`)
+- ✅ Windows: Uses `GetPhysicalCursorPos()` for true physical coordinates
+- ✅ Linux/macOS: Stub implementations (fail gracefully with clear error)
+- ✅ Removed `mouse_position` crate dependency
+- ✅ Platform-agnostic API easy to extend for future platforms
+
+**Files Created:**
+- `pc/src/infrastructure/cursor/mod.rs` - Public API
+- `pc/src/infrastructure/cursor/traits.rs` - Platform trait
+- `pc/src/infrastructure/cursor/windows.rs` - Windows implementation
+- `pc/src/infrastructure/cursor/linux.rs` - Linux stub
+- `pc/src/infrastructure/cursor/macos.rs` - macOS stub
+
+**Files Modified:**
+- `pc/Cargo.toml` - Added `windows` crate, removed `mouse_position`
+- `pc/src/infrastructure/screen_capture.rs` - Uses physical coordinates
+- `pc/src/infrastructure/mod.rs` - Added cursor module
+
+---
+
+### Aspect Ratio Fix for Screen Streaming (2026-03-01) ✅
+
+**Problem Fixed:**
+- Image didn't fill touchpad area (empty space on left/right)
+- Client sent wrong dimensions (1:1.75 instead of 1:2.745)
+
+**Solution Implemented:**
+- ✅ Used `LayoutBuilder` to measure actual touchpad container size
+- ✅ Send actual container dimensions to server
+- ✅ Server respects requested dimensions
+- ✅ Image now fills touchpad area correctly
+
+**Files Modified:**
+- `mobile/lib/presentation/screens/touchpad_screen.dart` - LayoutBuilder for measurement
+
+---
+
+### Screen Streaming - Complete Implementation (Previous)
 
 **Critical Bug Fixed:**
 - ✅ JPEG encoding error: RGBA → RGB conversion (xcap returns RGBA, JPEG doesn't support alpha)

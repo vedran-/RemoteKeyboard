@@ -8,7 +8,9 @@
 //! - Configuration
 //! - Firewall management
 //! - Screen capture (for streaming to mobile)
+//! - Cursor position (cross-platform physical coordinates)
 
+pub mod cursor;
 pub mod websocket;
 pub mod mdns;
 pub mod input;

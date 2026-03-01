@@ -49,6 +49,7 @@ RemoteKeyboard lets you control your PC (especially useful for PC connected to T
 - ✅ **Connection monitoring** - Heartbeat-based connection health monitoring
 - ✅ **Network permissions** - Full Android network support
 - ✅ **Multi-monitor support** - Smooth cursor movement across multiple monitors
+- ✅ **Physical cursor coordinates** - True physical pixels for multi-DPI setups (4K+2K)
 - ✅ **Screen capture streaming** - Stream screen area around cursor (5 FPS, configurable zoom)
 - ✅ **Mobile screen display** - View PC screen in touchpad area with cursor indicator
 - ✅ **Aspect ratio preservation** - No stretching, black letterboxing
