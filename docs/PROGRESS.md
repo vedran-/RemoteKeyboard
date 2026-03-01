@@ -2,13 +2,39 @@
 
 **Date:** 2026-03-01  
 **Status:** MVP Complete ✅  
-**Test Coverage:** 99 tests passing  
+**Test Coverage:** 110 tests passing (PC) + 99 tests passing (Mobile) = **209 total**  
 
 ---
 
 ## 🎉 Latest Achievements
 
-### Auto-Reconnect & Smart Features
+### Multi-Monitor Mouse Fix (2026-03-01) ✅
+
+**Problem:**
+- Cursor jumped to wrong monitor when crossing boundaries
+- Made app unusable on multi-monitor setups
+
+**Solution:**
+- Implemented clamping on relative mouse movement (±30px max)
+- Allows smooth cursor crossing across all monitors
+- Cross-platform solution (Windows, macOS, Linux)
+
+**Files Modified:**
+- `pc/src/infrastructure/input/enigo_adapter.rs` - Added clamping logic
+- `pc/Cargo.toml` - Added mouse_position crate (for future cursor tracking)
+
+**Files Created:**
+- `pc/src/tests/mouse_clamping.rs` - 8 tests for clamping logic
+- `docs/ADR-014-mouse-clamping.md` - Architecture Decision Record
+
+**Test Results:**
+- ✅ 8 new tests passing
+- ✅ 110 total PC tests passing
+- ✅ Multi-monitor support verified
+
+---
+
+### Auto-Reconnect & Smart Features (Previous)
 
 #### 1. Auto-Reconnect with Exponential Backoff ✅
 **What it does:**

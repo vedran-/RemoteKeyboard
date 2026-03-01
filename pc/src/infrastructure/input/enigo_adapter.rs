@@ -6,12 +6,17 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 use enigo::{Enigo, Key, Settings, Coordinate, Axis, Keyboard, Mouse, Button};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::application::ports::{Result, Error};
 use crate::domain::entities::command::{MouseCommand, KeyboardCommand, MediaCommand};
 use crate::domain::services::InputExecutor;
 use crate::domain::value_objects::{MouseButton as DomainMouseButton, KeyCode};
+
+/// Maximum delta for relative mouse movement to prevent edge-wrapping bug on multi-monitor
+/// This ensures smooth cursor movement across monitor boundaries without triggering
+/// the Windows/enigo bug where large relative moves cause cursor to jump to wrong monitor.
+pub const MAX_MOUSE_DELTA: i32 = 30;
 
 /// Enigo-based input executor
 pub struct EnigoInputAdapter {
@@ -41,13 +46,26 @@ impl EnigoInputAdapter {
 impl InputExecutor for EnigoInputAdapter {
     async fn execute_mouse(&self, command: &MouseCommand) -> Result<()> {
         debug!("Executing mouse command: {:?}", command);
-        
+
         let mut enigo = self.enigo.lock().map_err(|e| Error::internal(format!("Mutex poisoned: {}", e)))?;
-        
+
         match command {
             MouseCommand::Move { dx, dy } => {
+                // Clamp relative moves to prevent edge-wrapping bug on multi-monitor setups
+                // This is a workaround for a known Windows/enigo bug where large relative
+                // moves cause cursor to jump to wrong monitor instead of smooth crossing.
+                let clamped_dx = dx.clamp(&-MAX_MOUSE_DELTA, &MAX_MOUSE_DELTA);
+                let clamped_dy = dy.clamp(&-MAX_MOUSE_DELTA, &MAX_MOUSE_DELTA);
+                
+                // Log if clamping was applied (useful for debugging)
+                if clamped_dx != dx || clamped_dy != dy {
+                    warn!("Mouse move clamped: ({}, {}) -> ({}, {})", dx, dy, clamped_dx, clamped_dy);
+                }
+                
+                debug!("Mouse move: dx={}, dy={}", clamped_dx, clamped_dy);
+                
                 // Relative mouse move using Coordinate::Rel
-                enigo.move_mouse(*dx, *dy, Coordinate::Rel)
+                enigo.move_mouse(*clamped_dx, *clamped_dy, Coordinate::Rel)
                     .map_err(|e| Error::input(format!("Failed to move mouse: {}", e)))?;
             }
             MouseCommand::MoveAbsolute { x, y } => {

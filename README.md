@@ -48,6 +48,7 @@ RemoteKeyboard lets you control your PC (especially useful for PC connected to T
 - ✅ **Cold start reconnect** - Automatically reconnects to last PC on app restart
 - ✅ **Connection monitoring** - Heartbeat-based connection health monitoring
 - ✅ **Network permissions** - Full Android network support
+- ✅ **Multi-monitor support** - Smooth cursor movement across multiple monitors
 
 ---
 
@@ -198,13 +199,14 @@ See [Architecture Decision Records](docs/DECISIONS.md) for rationale.
 
 | Component | Status | Tests |
 |-----------|--------|-------|
-| PC Server | ✅ Complete | 104 passing |
+| PC Server | ✅ Complete | 110 passing |
 | Mobile Windows | ✅ Complete | 99 passing |
 | Mobile Android | ✅ Complete | 99 passing |
 
-**Total:** 99 tests passing ✅
+**Total:** 209 tests passing ✅
 
 ### Completed Features (Latest)
+- ✅ Multi-monitor mouse support (clamping workaround)
 - ✅ Auto-reconnect with exponential backoff (1s → 2s → 3s → 4s → 5s)
 - ✅ Cold start reconnect to last PC
 - ✅ Heartbeat-based connection monitoring
