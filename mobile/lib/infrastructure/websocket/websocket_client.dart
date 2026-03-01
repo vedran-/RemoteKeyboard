@@ -171,16 +171,32 @@ class WebSocketClient {
     if (!isConnected || _channel == null) {
       throw WebSocketException('Not connected');
     }
-    
+
     try {
       final json = command.toJson();
       // Add timestamp
       json['timestamp'] = DateTime.now().millisecondsSinceEpoch;
-      
+
       _channel!.sink.add(jsonEncode(json));
       print('[WebSocket] Sent command: ${json['type']}');
     } catch (e) {
       print('[WebSocket] Error sending command: $e');
+      rethrow;
+    }
+  }
+
+  /// Send raw JSON message (for custom messages like screen control)
+  Future<void> sendRawMessage(Map<String, dynamic> message) async {
+    if (!isConnected || _channel == null) {
+      throw WebSocketException('Not connected');
+    }
+
+    try {
+      message['timestamp'] = DateTime.now().millisecondsSinceEpoch;
+      _channel!.sink.add(jsonEncode(message));
+      print('[WebSocket] Sent raw message: ${message['type']}');
+    } catch (e) {
+      print('[WebSocket] Error sending raw message: $e');
       rethrow;
     }
   }

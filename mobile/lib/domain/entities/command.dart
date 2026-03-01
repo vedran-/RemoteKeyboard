@@ -133,6 +133,74 @@ enum CommandType {
   custom,
 }
 
+/// Screen frame for streaming from PC
+class ScreenFrame {
+  final int cursorX;
+  final int cursorY;
+  final int monitorId;
+  final int captureWidth;
+  final int captureHeight;
+  final String data;  // Base64 encoded JPEG
+
+  ScreenFrame({
+    required this.cursorX,
+    required this.cursorY,
+    required this.monitorId,
+    required this.captureWidth,
+    required this.captureHeight,
+    required this.data,
+  });
+
+  /// Parse from JSON message
+  factory ScreenFrame.fromJson(Map<String, dynamic> json) {
+    return ScreenFrame(
+      cursorX: json['cursor_x'] as int,
+      cursorY: json['cursor_y'] as int,
+      monitorId: json['monitor_id'] as int,
+      captureWidth: json['capture_width'] as int,
+      captureHeight: json['capture_height'] as int,
+      data: json['data'] as String,
+    );
+  }
+
+  /// Convert to JSON
+  Map<String, dynamic> toJson() {
+    return {
+      'cursor_x': cursorX,
+      'cursor_y': cursorY,
+      'monitor_id': monitorId,
+      'capture_width': captureWidth,
+      'capture_height': captureHeight,
+      'data': data,
+    };
+  }
+}
+
+/// Screen control messages (mobile → PC)
+class ScreenControl {
+  final bool enabled;
+  final int? captureWidth;   // Client-requested capture width
+  final int? captureHeight;  // Client-requested capture height
+  final int? maxDimension;   // Max dimension for server downscaling
+
+  ScreenControl({
+    required this.enabled,
+    this.captureWidth,
+    this.captureHeight,
+    this.maxDimension,
+  });
+
+  /// Convert to JSON
+  Map<String, dynamic> toJson() {
+    return {
+      'enabled': enabled,
+      if (captureWidth != null) 'capture_width': captureWidth,
+      if (captureHeight != null) 'capture_height': captureHeight,
+      if (maxDimension != null) 'max_dimension': maxDimension,
+    };
+  }
+}
+
 /// Mouse command payloads
 @JsonSerializable()
 class MouseMovePayload {

@@ -30,6 +30,11 @@ mdns-sd = "0.11"
 enigo = "0.6"
 mouse_position = "0.1"
 
+# Screen capture (for streaming to mobile)
+xcap = "0.8"
+image = "0.25"
+base64 = "0.22"
+
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

@@ -19,18 +19,38 @@ pub enum Command {
     /// Mouse-related commands
     #[serde(rename = "mouse")]
     Mouse(MouseCommand),
-    
+
     /// Keyboard-related commands
     #[serde(rename = "keyboard")]
     Keyboard(KeyboardCommand),
-    
+
     /// Media key commands
     #[serde(rename = "media")]
     Media(MediaCommand),
-    
+
     /// Custom/extensible commands
     #[serde(rename = "custom")]
     Custom(CustomCommand),
+}
+
+/// Screen frame for streaming to mobile
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScreenFrame {
+    pub cursor_x: i32,
+    pub cursor_y: i32,
+    pub monitor_id: u32,
+    pub capture_width: u32,
+    pub capture_height: u32,
+    pub data: String,  // Base64 encoded JPEG
+}
+
+/// Screen control messages (mobile → PC)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScreenControl {
+    pub enabled: bool,
+    pub capture_width: Option<u32>,    // Client-requested capture width
+    pub capture_height: Option<u32>,   // Client-requested capture height
+    pub max_dimension: Option<u32>,    // Max dimension for server downscaling
 }
 
 /// Mouse command variants

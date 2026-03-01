@@ -2,13 +2,127 @@
 
 **Date:** 2026-03-01  
 **Status:** MVP Complete ✅  
-**Test Coverage:** 110 tests passing (PC) + 99 tests passing (Mobile) = **209 total**  
+**Test Coverage:** 119 tests passing (PC) + 99 tests passing (Mobile) = **218 total**  
 
 ---
 
 ## 🎉 Latest Achievements
 
-### Multi-Monitor Mouse Fix (2026-03-01) ✅
+### Aspect Ratio & Bandwidth Optimization (2026-03-01) ✅
+
+**What Was Implemented:**
+- ✅ Client controls capture dimensions (WxH based on touchpad size)
+- ✅ Server-side downscaling (max 400px, saves bandwidth)
+- ✅ Aspect ratio preserved (BoxFit.contain with letterboxing)
+- ✅ Touchpad calculates ideal dimensions from screen size
+- ✅ Black letterboxing for non-matching aspect ratios
+
+**Files Modified:**
+- `mobile/lib/domain/entities/command.dart` - ScreenControl with width/height/max_dimension
+- `mobile/lib/application/services/screen_stream_service.dart` - Dimension-based control
+- `mobile/lib/presentation/screens/touchpad_screen.dart` - BoxFit.contain, dimension calculation
+- `pc/src/domain/entities/command.rs` - ScreenControl with width/height/max_dimension
+- `pc/src/infrastructure/screen_capture.rs` - Server-side downscaling with Lanczos3 filter
+- `pc/src/infrastructure/websocket/server.rs` - Handle dimension-based control
+
+**Test Results:**
+- ✅ 119 PC tests passing
+- ✅ 99 mobile tests passing
+- ✅ Total: 218 tests passing
+
+**How It Works:**
+1. Mobile calculates touchpad dimensions (e.g., 600x400)
+2. Sends `{ "enabled": true, "capture_width": 600, "capture_height": 400, "max_dimension": 400 }`
+3. PC captures at 600x400, downscales to 400x267 (preserving aspect ratio)
+4. Mobile displays with `BoxFit.contain` - black bars if aspect ratios don't match
+5. Bandwidth optimized - never sends images >400px in any dimension
+
+**Benefits:**
+- **No stretching** - Image always maintains correct aspect ratio
+- **Ideal framing** - Capture area matches touchpad shape
+- **Bandwidth savings** - Server downscales large captures before sending
+- **Quality** - Lanczos3 filter for high-quality downscaling
+
+---
+
+### Phase 3: Mobile Client Display (Previous)
+
+**What Was Implemented:**
+- ✅ Screen frame entity (mobile)
+- ✅ Screen stream service for mobile
+- ✅ Touchpad screen displays screen capture from PC
+- ✅ Screen streaming toggle button in app bar
+- ✅ Cursor position indicator (red dot)
+- ✅ Base64 JPEG decoding and display
+- ✅ Automatic frame updates via ChangeNotifier
+
+**Files Created:**
+- `mobile/lib/application/services/screen_stream_service.dart` - Screen streaming service
+
+**Files Modified:**
+- `mobile/lib/domain/entities/command.dart` - Added ScreenFrame, ScreenControl
+- `mobile/lib/presentation/screens/touchpad_screen.dart` - Display screen capture
+- `mobile/lib/presentation/screens/home_screen.dart` - Pass screen stream service
+- `mobile/lib/main.dart` - Create screen stream service
+- `mobile/lib/infrastructure/websocket/websocket_client.dart` - Added sendRawMessage()
+
+**Test Results:**
+- ✅ 71 mobile tests passing
+- ✅ Build successful (Windows)
+- ✅ Screen capture displays in touchpad area
+- ✅ Cursor indicator shows PC cursor position
+
+**How It Works:**
+1. User taps screen share icon in touchpad app bar
+2. Mobile sends `{ "enabled": true, "capture_size": 200 }` to PC
+3. PC starts streaming at 5 FPS
+4. Mobile receives frames, decodes base64 JPEG
+5. Displays in touchpad area with cursor indicator
+6. User can still use touchpad gestures over the image
+
+---
+
+### Screen Capture Streaming (Previous)
+
+**What Was Implemented:**
+- ✅ Cross-platform screen capture using xcap crate
+- ✅ Captures screen area around cursor position
+- ✅ Multi-monitor support (auto-detects which monitor cursor is on)
+- ✅ JPEG compression at 75% quality
+- ✅ Base64 encoding for WebSocket transmission
+- ✅ Configurable capture size (100-400px, default 200px)
+- ✅ **5 FPS streaming** (adjustable)
+- ✅ Start/stop streaming via control messages
+- ✅ Zoom control via capture size adjustment
+
+**Files Created:**
+- `pc/src/infrastructure/screen_capture.rs` - Screen capture service
+- `pc/src/tests/screen_capture.rs` - 10 tests for screen capture
+
+**Files Modified:**
+- `pc/Cargo.toml` - Added xcap, image, base64 dependencies
+- `pc/src/domain/entities/command.rs` - Added ScreenFrame, ScreenControl
+- `pc/src/infrastructure/websocket/server.rs` - Integrated screen streaming at 5 FPS
+- `pc/src/infrastructure/mod.rs` - Added screen_capture module
+
+**Test Results:**
+- ✅ 10 new screen capture tests passing
+- ✅ 120 total PC tests passing
+- ✅ Screen capture successfully captures around cursor
+- ✅ Multi-monitor detection works
+- ✅ JPEG compression working
+- ✅ 5 FPS streaming integrated
+
+**How It Works:**
+1. Mobile sends `ScreenControl` message: `{ "enabled": true, "capture_size": 200 }`
+2. PC starts capturing screen at 5 FPS (every 200ms)
+3. Each frame sent as: `{ "type": "screen_frame", "cursor_x": ..., "data": <base64 JPEG> }`
+4. Mobile displays frame in touchpad area
+5. Pinch/wheel adjusts `capture_size` for zoom in/out
+
+---
+
+### Multi-Monitor Mouse Fix (Previous)
 
 **Problem:**
 - Cursor jumped to wrong monitor when crossing boundaries

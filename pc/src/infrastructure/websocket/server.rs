@@ -13,7 +13,11 @@ use tokio_tungstenite::tungstenite::Message;
 use tracing::{debug, error, info, warn};
 
 use crate::application::ports::{Result, Error};
-use crate::domain::entities::command::{Command, ProtocolMessage, MessageType};
+use crate::domain::entities::command::{Command, ProtocolMessage, MessageType, ScreenFrame, ScreenControl};
+use crate::infrastructure::screen_capture::ScreenCaptureService;
+
+/// Screen streaming frame rate (FPS)
+const SCREEN_STREAM_FPS: u32 = 5;
 
 /// WebSocket server configuration
 #[derive(Debug, Clone)]
@@ -164,6 +168,14 @@ async fn handle_connection(
 
     info!("WebSocket client connected");
 
+    // Screen capture service (lazy init - only created when streaming enabled)
+    let mut screen_capture: Option<ScreenCaptureService> = None;
+    let mut screen_streaming_enabled = false;
+    
+    // Channel for screen frames
+    let (screen_tx, mut screen_rx) = tokio::sync::mpsc::channel::<String>(5);
+    let mut screen_stream_handle: Option<tokio::task::JoinHandle<()>> = None;
+
     // Create channel for heartbeat messages
     let (heartbeat_tx, mut heartbeat_rx) = tokio::sync::mpsc::channel::<String>(10);
 
@@ -186,14 +198,108 @@ async fn handle_connection(
         }
     });
 
-    // Read messages from client and send heartbeats
+    // Read messages from client, send heartbeats, and send screen frames
     loop {
         tokio::select! {
             // Read from client
             msg = reader.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
-                        if let Err(e) = handle_message(&text, &command_tx) {
+                        // Try to parse as screen control first
+                        if let Ok(control) = serde_json::from_str::<ScreenControl>(&text) {
+                            // Handle screen control message
+                            if control.enabled && !screen_streaming_enabled {
+                                // Start streaming
+                                info!("Screen streaming enabled");
+                                screen_streaming_enabled = true;
+
+                                // Initialize screen capture if not already done
+                                if screen_capture.is_none() {
+                                    match ScreenCaptureService::new() {
+                                        Ok(service) => {
+                                            screen_capture = Some(service);
+
+                                            // Set capture dimensions if specified
+                                            if let (Some(width), Some(height)) = (control.capture_width, control.capture_height) {
+                                                if let Some(ref capture) = screen_capture {
+                                                    capture.set_capture_dimensions(width, height);
+                                                    info!("Capture dimensions set to {}x{}", width, height);
+                                                }
+                                            }
+
+                                            // Set max dimension for downscaling if specified
+                                            if let Some(max_dim) = control.max_dimension {
+                                                if let Some(ref capture) = screen_capture {
+                                                    capture.set_max_dimension(max_dim);
+                                                    info!("Max dimension set to {}", max_dim);
+                                                }
+                                            }
+
+                                            // Start screen streaming task
+                                            let capture: Option<ScreenCaptureService> = screen_capture.clone();
+                                            let tx = screen_tx.clone();
+                                            screen_stream_handle = Some(tokio::spawn(async move {
+                                                let mut interval = tokio::time::interval(
+                                                    tokio::time::Duration::from_millis(1000 / SCREEN_STREAM_FPS as u64)
+                                                );
+                                                loop {
+                                                    interval.tick().await;
+                                                    if let Some(ref capture) = capture {
+                                                        if let Ok(frame) = capture.capture_around_cursor() {
+                                                            let msg = ProtocolMessage::new(
+                                                                MessageType::Custom,
+                                                                serde_json::json!({
+                                                                    "type": "screen_frame",
+                                                                    "cursor_x": frame.cursor_x,
+                                                                    "cursor_y": frame.cursor_y,
+                                                                    "monitor_id": frame.monitor_id,
+                                                                    "capture_width": frame.capture_width,
+                                                                    "capture_height": frame.capture_height,
+                                                                    "data": frame.data,
+                                                                }),
+                                                                chrono::Utc::now().timestamp_millis(),
+                                                            );
+                                                            if let Ok(json) = serde_json::to_string(&msg) {
+                                                                if tx.send(json).await.is_err() {
+                                                                    break;
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }));
+                                        }
+                                        Err(e) => {
+                                            error!("Failed to initialize screen capture: {}", e);
+                                            screen_streaming_enabled = false;
+                                        }
+                                    }
+                                }
+                            } else if !control.enabled && screen_streaming_enabled {
+                                // Stop streaming
+                                info!("Screen streaming disabled");
+                                screen_streaming_enabled = false;
+                                if let Some(handle) = screen_stream_handle.take() {
+                                    handle.abort();
+                                }
+                            }
+
+                            // Adjust capture dimensions if specified
+                            if let (Some(width), Some(height)) = (control.capture_width, control.capture_height) {
+                                if let Some(ref capture) = screen_capture {
+                                    capture.set_capture_dimensions(width, height);
+                                    info!("Capture dimensions adjusted to {}x{}", width, height);
+                                }
+                            }
+
+                            // Adjust max dimension if specified
+                            if let Some(max_dim) = control.max_dimension {
+                                if let Some(ref capture) = screen_capture {
+                                    capture.set_max_dimension(max_dim);
+                                    info!("Max dimension adjusted to {}", max_dim);
+                                }
+                            }
+                        } else if let Err(e) = handle_message(&text, &command_tx) {
                             warn!("Failed to handle message: {}", e);
 
                             // Send error response
@@ -240,11 +346,22 @@ async fn handle_connection(
                     break;
                 }
             }
+            // Send screen frame
+            Some(screen_json) = screen_rx.recv() => {
+                if screen_streaming_enabled {
+                    if writer.send(Message::Text(screen_json)).await.is_err() {
+                        break;
+                    }
+                }
+            }
         }
     }
 
-    // Cancel heartbeat task
+    // Cancel heartbeat and screen streaming tasks
     heartbeat_handle.abort();
+    if let Some(handle) = screen_stream_handle {
+        handle.abort();
+    }
 
     Ok(())
 }
