@@ -5,6 +5,8 @@
 ![Status](https://img.shields.io/badge/status-Complete-green)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android-lightgrey)
 ![Tests](https://img.shields.io/badge/tests-165%20passing-brightgreen)
+![CI](https://github.com/vedran-/RemoteKeyboard/actions/workflows/ci.yml/badge.svg)
+![Release](https://img.shields.io/github/v/release/vedran-/RemoteKeyboard?label=latest%20release)
 
 ---
 
@@ -76,6 +78,24 @@ This project uses **Domain-Driven Design (DDD)** with a layered architecture:
 | [PROTOCOL.md](docs/PROTOCOL.md) | WebSocket message formats, mDNS spec |
 | [ROADMAP.md](docs/ROADMAP.md) | Development phases, milestones, status |
 | [DECISIONS.md](docs/DECISIONS.md) | Architecture Decision Records (ADRs) |
+
+---
+
+## 📥 Downloads (Latest Release)
+
+**Get the latest pre-built binaries:**
+
+[![GitHub Release](https://img.shields.io/github/v/release/vedran-/RemoteKeyboard?label=Download%20Latest&style=for-the-badge)](https://github.com/vedran-/RemoteKeyboard/releases/latest)
+
+**Or visit:** https://github.com/vedran-/RemoteKeyboard/releases
+
+**What to download:**
+| File | Description | Size |
+|------|-------------|------|
+| `RemoteKeyboard-Server-v*.exe` | PC Server (Windows) | ~3.3 MB |
+| `RemoteKeyboard-Client-v*.exe` | Mobile Client (Windows) | ~30 MB |
+| `RemoteKeyboard-Client-v*-arm64.apk` | Mobile Client (Android ARM64) | ~50 MB |
+| `RemoteKeyboard-Client-v*-armv7.apk` | Mobile Client (Android ARMv7) | ~50 MB |
 
 ---
 

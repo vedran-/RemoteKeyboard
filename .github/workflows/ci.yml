@@ -1,0 +1,116 @@
+# ============================================================================
+# CI Pipeline - Build on Every Push/PR
+# ============================================================================
+# This workflow builds the project on every push and PR to catch errors early.
+# It does NOT create releases - that's done by release.yml
+# ============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  # --------------------------------------------------------------------------
+  # Build PC Server (Windows)
+  # --------------------------------------------------------------------------
+  build-pc:
+    name: Build PC Server (Windows)
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+        target: x86_64-pc-windows-msvc
+
+    - name: Cache Rust dependencies
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: pc
+
+    - name: Build PC Server
+      run: |
+        cd pc
+        cargo build --release --verbose
+
+    - name: Verify PC build output
+      run: |
+        if (Test-Path "pc\target\release\remote_keyboard_pc.exe") {
+          Write-Host "✅ PC Server built successfully"
+          Get-Item "pc\target\release\remote_keyboard_pc.exe" | Select-Object Length, LastWriteTime
+        } else {
+          Write-Error "❌ PC Server build failed - executable not found"
+          exit 1
+        }
+
+  # --------------------------------------------------------------------------
+  # Build Mobile Windows Client
+  # --------------------------------------------------------------------------
+  build-mobile-windows:
+    name: Build Mobile Client (Windows)
+    runs-on: windows-latest
+    needs: build-pc  # Wait for PC build to verify repo state
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.x'
+        channel: 'stable'
+        cache: true
+
+    - name: Enable Windows Desktop
+      run: flutter config --enable-windows-desktop
+
+    - name: Get Dependencies
+      run: |
+        cd mobile
+        flutter pub get
+
+    - name: Build Mobile Windows Client
+      run: |
+        cd mobile
+        flutter build windows --release --verbose
+
+    - name: Verify Mobile Windows build output
+      run: |
+        $exePath = "mobile\build\windows\x64\runner\Release\remote_keyboard_mobile.exe"
+        if (Test-Path $exePath) {
+          Write-Host "✅ Mobile Windows Client built successfully"
+          Get-Item $exePath | Select-Object Length, LastWriteTime
+        } else {
+          Write-Error "❌ Mobile Windows Client build failed - executable not found"
+          exit 1
+        }
+
+  # --------------------------------------------------------------------------
+  # Summary
+  # --------------------------------------------------------------------------
+  summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [build-pc, build-mobile-windows]
+    if: always()
+    
+    steps:
+    - name: Summary
+      run: |
+        echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ All builds completed successfully!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| PC Server | ${{ needs.build-pc.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Mobile Windows | ${{ needs.build-mobile-windows.result }} |" >> $GITHUB_STEP_SUMMARY
