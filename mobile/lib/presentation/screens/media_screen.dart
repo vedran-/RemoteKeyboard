@@ -10,32 +10,23 @@ import '../../domain/entities/command.dart';
 class MediaScreen extends StatelessWidget {
   final CommandService commandService;
   final ConnectionService connectionService;
+  final NotificationService notificationService;
 
   const MediaScreen({
     super.key,
     required this.commandService,
     required this.connectionService,
+    required this.notificationService,
   });
 
   void _sendMediaKey(BuildContext context, MediaAction action) {
     if (!connectionService.isConnected) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Not connected to PC'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      notificationService.warning(context, 'Not connected to PC');
       return;
     }
 
     commandService.sendMediaKey(action);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Sent: ${_actionName(action)}'),
-        duration: const Duration(milliseconds: 500),
-      ),
-    );
+    notificationService.command(context, 'Sent: ${_actionName(action)}');
   }
 
   String _actionName(MediaAction action) {

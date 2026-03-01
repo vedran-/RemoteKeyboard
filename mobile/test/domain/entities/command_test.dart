@@ -73,24 +73,24 @@ void main() {
         final command = Command.mediaKey(MediaAction.playPause);
 
         expect(command.type, CommandType.media);
-        expect(command.payload, isA<MediaPayload>());
-        expect((command.payload as MediaPayload).action, MediaAction.playPause);
+        expect(command.payload, isA<String>());
+        expect(command.payload, 'play_pause');
       });
 
       test('mediaKey creates correct command for volumeUp', () {
         final command = Command.mediaKey(MediaAction.volumeUp);
 
         expect(command.type, CommandType.media);
-        expect(command.payload, isA<MediaPayload>());
-        expect((command.payload as MediaPayload).action, MediaAction.volumeUp);
+        expect(command.payload, isA<String>());
+        expect(command.payload, 'vol_up');
       });
 
       test('mediaKey creates correct command for nextTrack', () {
         final command = Command.mediaKey(MediaAction.nextTrack);
 
         expect(command.type, CommandType.media);
-        expect(command.payload, isA<MediaPayload>());
-        expect((command.payload as MediaPayload).action, MediaAction.nextTrack);
+        expect(command.payload, isA<String>());
+        expect(command.payload, 'next');
       });
     });
 
@@ -102,8 +102,9 @@ void main() {
 
         expect(json['type'], 'mouse');
         expect(json['payload'], isA<Map<String, dynamic>>());
-        expect(json['payload']['dx'], 10);
-        expect(json['payload']['dy'], -5);
+        expect(json['payload']['action'], 'move');
+        expect(json['payload']['data']['dx'], 10);
+        expect(json['payload']['data']['dy'], -5);
       });
 
       test('keyPress serializes to JSON correctly', () {
@@ -113,7 +114,8 @@ void main() {
 
         expect(json['type'], 'keyboard');
         expect(json['payload'], isA<Map<String, dynamic>>());
-        expect(json['payload']['key'], 'A');
+        expect(json['payload']['action'], 'key_press');
+        expect(json['payload']['data']['key'], 'A');
       });
 
       test('mediaKey serializes to JSON correctly', () {
@@ -122,8 +124,7 @@ void main() {
         final json = command.toJson();
 
         expect(json['type'], 'media');
-        expect(json['payload'], isA<Map<String, dynamic>>());
-        expect(json['payload']['action'], 'playPause');
+        expect(json['payload'], 'play_pause');
       });
 
       test('fromJson deserializes mouse command', () {

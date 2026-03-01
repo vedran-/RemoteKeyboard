@@ -9,11 +9,13 @@ import '../../application/services/services.dart';
 class KeyboardScreen extends StatefulWidget {
   final CommandService commandService;
   final ConnectionService connectionService;
+  final NotificationService notificationService;
 
   const KeyboardScreen({
     super.key,
     required this.commandService,
     required this.connectionService,
+    required this.notificationService,
   });
 
   @override
@@ -40,12 +42,7 @@ class _KeyboardScreenState extends State<KeyboardScreen> {
     _controller.clear();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Text sent'),
-          duration: Duration(milliseconds: 500),
-        ),
-      );
+      widget.notificationService.command(context, 'Text sent');
     }
   }
 
@@ -55,25 +52,13 @@ class _KeyboardScreenState extends State<KeyboardScreen> {
     widget.commandService.sendKeyPress(key);
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Sent: $key'),
-          duration: const Duration(milliseconds: 300),
-        ),
-      );
+      widget.notificationService.command(context, 'Sent: $key');
     }
   }
 
   bool _checkConnection() {
     if (!widget.connectionService.isConnected) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Not connected to PC'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
+      widget.notificationService.warning(context, 'Not connected to PC');
       return false;
     }
     return true;

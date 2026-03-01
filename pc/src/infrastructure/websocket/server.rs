@@ -147,68 +147,105 @@ async fn handle_connection(
     let ws_stream = tokio_tungstenite::accept_async(stream)
         .await
         .map_err(|e| Error::network(format!("WebSocket handshake failed: {}", e)))?;
-    
+
     let (mut writer, mut reader) = ws_stream.split();
-    
+
     // Send connection accepted message
     let accept_msg = ProtocolMessage::new(
         MessageType::ConnectionAccepted,
         serde_json::json!({ "session_id": uuid::Uuid::new_v4().to_string() }),
         ProtocolMessage::now_timestamp(),
     );
-    
+
     writer
         .send(Message::Text(serde_json::to_string(&accept_msg).unwrap()))
         .await
         .map_err(|e| Error::connection(format!("Failed to send accept message: {}", e)))?;
-    
+
     info!("WebSocket client connected");
-    
-    // Read messages from client
-    while let Some(msg) = reader.next().await {
-        match msg {
-            Ok(Message::Text(text)) => {
-                if let Err(e) = handle_message(&text, &command_tx) {
-                    warn!("Failed to handle message: {}", e);
-                    
-                    // Send error response
-                    let error_msg = ProtocolMessage::new(
-                        MessageType::Error,
-                        serde_json::json!({ 
-                            "code": "invalid_message",
-                            "message": e.to_string()
-                        }),
-                        ProtocolMessage::now_timestamp(),
-                    );
-                    
-                    let _ = writer.send(Message::Text(serde_json::to_string(&error_msg).unwrap())).await;
+
+    // Create channel for heartbeat messages
+    let (heartbeat_tx, mut heartbeat_rx) = tokio::sync::mpsc::channel::<String>(10);
+
+    // Spawn heartbeat task (send heartbeat every 5 seconds)
+    let heartbeat_writer_tx = heartbeat_tx.clone();
+    let heartbeat_handle = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
+        loop {
+            interval.tick().await;
+            let heartbeat = ProtocolMessage::new(
+                MessageType::Heartbeat,
+                serde_json::json!({ "timestamp": chrono::Utc::now().timestamp_millis() }),
+                chrono::Utc::now().timestamp_millis(),
+            );
+            if let Ok(json) = serde_json::to_string(&heartbeat) {
+                if heartbeat_writer_tx.send(json).await.is_err() {
+                    break;
                 }
             }
-            Ok(Message::Ping(data)) => {
-                // Respond with pong
-                let _ = writer.send(Message::Pong(data)).await;
+        }
+    });
+
+    // Read messages from client and send heartbeats
+    loop {
+        tokio::select! {
+            // Read from client
+            msg = reader.next() => {
+                match msg {
+                    Some(Ok(Message::Text(text))) => {
+                        if let Err(e) = handle_message(&text, &command_tx) {
+                            warn!("Failed to handle message: {}", e);
+
+                            // Send error response
+                            let error_msg = ProtocolMessage::new(
+                                MessageType::Error,
+                                serde_json::json!({
+                                    "code": "invalid_message",
+                                    "message": e.to_string()
+                                }),
+                                ProtocolMessage::now_timestamp(),
+                            );
+
+                            let _ = writer.send(Message::Text(serde_json::to_string(&error_msg).unwrap())).await;
+                        }
+                    }
+                    Some(Ok(Message::Ping(data))) => {
+                        // Respond with pong
+                        let _ = writer.send(Message::Pong(data)).await;
+                    }
+                    Some(Ok(Message::Pong(_))) => {
+                        // Heartbeat acknowledgment
+                        debug!("Received heartbeat pong");
+                    }
+                    Some(Ok(Message::Close(_))) => {
+                        info!("WebSocket client disconnected");
+                        break;
+                    }
+                    Some(Ok(Message::Binary(_))) => {
+                        warn!("Received binary message, expected text");
+                    }
+                    Some(Ok(Message::Frame(_))) => {
+                        // Ignore raw frames
+                    }
+                    Some(Err(e)) => {
+                        error!("WebSocket error: {}", e);
+                        break;
+                    }
+                    None => break,
+                }
             }
-            Ok(Message::Pong(_)) => {
-                // Heartbeat acknowledgment
-                debug!("Received heartbeat pong");
-            }
-            Ok(Message::Close(_)) => {
-                info!("WebSocket client disconnected");
-                break;
-            }
-            Ok(Message::Binary(_)) => {
-                warn!("Received binary message, expected text");
-            }
-            Ok(Message::Frame(_)) => {
-                // Ignore raw frames
-            }
-            Err(e) => {
-                error!("WebSocket error: {}", e);
-                break;
+            // Send heartbeat
+            Some(heartbeat_json) = heartbeat_rx.recv() => {
+                if writer.send(Message::Text(heartbeat_json)).await.is_err() {
+                    break;
+                }
             }
         }
     }
-    
+
+    // Cancel heartbeat task
+    heartbeat_handle.abort();
+
     Ok(())
 }
 

@@ -10,11 +10,13 @@ import '../../domain/entities/command.dart';
 class TouchpadScreen extends StatefulWidget {
   final CommandService commandService;
   final ConnectionService connectionService;
+  final NotificationService notificationService;
 
   const TouchpadScreen({
     super.key,
     required this.commandService,
     required this.connectionService,
+    required this.notificationService,
   });
 
   @override
@@ -50,30 +52,22 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
 
   void _handleTap() {
     if (!widget.connectionService.isConnected) {
-      _showNotConnectedMessage();
+      widget.notificationService.warning(context, 'Not connected to PC');
       return;
     }
 
     widget.commandService.sendQuickClick(MouseButton.left);
+    widget.notificationService.command(context, 'Left click');
   }
 
   void _handleSecondaryTap() {
     if (!widget.connectionService.isConnected) {
-      _showNotConnectedMessage();
+      widget.notificationService.warning(context, 'Not connected to PC');
       return;
     }
 
     widget.commandService.sendQuickClick(MouseButton.right);
-  }
-
-  void _showNotConnectedMessage() {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Not connected to PC'),
-        backgroundColor: Colors.orange,
-      ),
-    );
+    widget.notificationService.command(context, 'Right click');
   }
 
   @override

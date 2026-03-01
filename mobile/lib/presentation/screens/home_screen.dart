@@ -16,11 +16,13 @@ import 'connection_screen.dart';
 class HomeScreen extends StatefulWidget {
   final ConnectionService connectionService;
   final CommandService commandService;
+  final NotificationService notificationService;
 
   const HomeScreen({
     super.key,
     required this.connectionService,
     required this.commandService,
+    required this.notificationService,
   });
 
   @override
@@ -36,17 +38,37 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _screens = [
-      ConnectionScreen(connectionService: widget.connectionService),
-      TouchpadScreen(commandService: widget.commandService, connectionService: widget.connectionService),
-      KeyboardScreen(commandService: widget.commandService, connectionService: widget.connectionService),
-      MediaScreen(commandService: widget.commandService, connectionService: widget.connectionService),
+      ConnectionScreen(
+        connectionService: widget.connectionService,
+        notificationService: widget.notificationService,
+      ),
+      TouchpadScreen(
+        commandService: widget.commandService,
+        connectionService: widget.connectionService,
+        notificationService: widget.notificationService,
+      ),
+      KeyboardScreen(
+        commandService: widget.commandService,
+        connectionService: widget.connectionService,
+        notificationService: widget.notificationService,
+      ),
+      MediaScreen(
+        commandService: widget.commandService,
+        connectionService: widget.connectionService,
+        notificationService: widget.notificationService,
+      ),
     ];
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_selectedIndex],
+      body: Stack(
+        children: [
+          _screens[_selectedIndex],
+          NotificationOverlay(service: widget.notificationService),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) {

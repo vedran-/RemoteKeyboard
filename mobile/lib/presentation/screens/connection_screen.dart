@@ -4,12 +4,17 @@
 
 import 'package:flutter/material.dart';
 
-import '../../application/services/connection_service.dart';
+import '../../application/services/services.dart';
 
 class ConnectionScreen extends StatefulWidget {
   final ConnectionService connectionService;
+  final NotificationService notificationService;
 
-  const ConnectionScreen({super.key, required this.connectionService});
+  const ConnectionScreen({
+    super.key,
+    required this.connectionService,
+    required this.notificationService,
+  });
 
   @override
   State<ConnectionScreen> createState() => _ConnectionScreenState();
@@ -95,65 +100,25 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
     final port = int.tryParse(_portController.text.trim()) ?? 8765;
 
     if (name.isEmpty || address.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter name and IP address')),
-      );
+      widget.notificationService.warning(context, 'Please enter name and IP address');
       return;
     }
 
     widget.connectionService.addManualDevice(name, address, port: port);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Added $name at $address:$port')),
-    );
+    widget.notificationService.success(context, 'Added $name at $address:$port');
   }
 
   void _connectToDevice(device) async {
-    // Show loading indicator
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation(Colors.white),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Text('Connecting to ${device.name}...'),
-          ],
-        ),
-        duration: const Duration(seconds: 10),
-      ),
-    );
+    // Show connecting notification
+    widget.notificationService.info(context, 'Connecting to ${device.name}...');
 
     // Attempt connection
     final success = await widget.connectionService.connectToDevice(device);
 
     if (success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white),
-              const SizedBox(width: 16),
-              Text('Connected to ${device.name}'),
-            ],
-          ),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      widget.notificationService.success(context, 'Connected to ${device.name}');
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Connection failed. Make sure PC app is running.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      widget.notificationService.error(context, 'Connection failed. Check PC is running.');
     }
   }
 
@@ -167,6 +132,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
             icon: const Icon(Icons.refresh),
             onPressed: () {
               widget.connectionService.startDiscovery();
+              widget.notificationService.info(context, 'Scanning for devices...');
             },
           ),
         ],
@@ -199,6 +165,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
                         icon: const Icon(Icons.link_off),
                         onPressed: () {
                           widget.connectionService.disconnect();
+                          widget.notificationService.info(context, 'Disconnected');
                         },
                       ),
                     ],
@@ -278,6 +245,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
           ElevatedButton.icon(
             onPressed: () {
               widget.connectionService.startDiscovery();
+              widget.notificationService.info(context, 'Scanning for devices...');
             },
             icon: const Icon(Icons.refresh),
             label: const Text('Scan Again'),

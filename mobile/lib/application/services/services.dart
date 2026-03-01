@@ -4,3 +4,4 @@
 
 export 'connection_service.dart';
 export 'command_service.dart';
+export 'notification_service.dart';

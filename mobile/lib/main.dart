@@ -24,6 +24,7 @@ class RemoteKeyboardApp extends StatelessWidget {
       connectionService.client,
       connectionService,
     );
+    final notificationService = NotificationService();
 
     return MaterialApp(
       title: 'RemoteKeyboard',
@@ -34,6 +35,7 @@ class RemoteKeyboardApp extends StatelessWidget {
       home: HomeScreen(
         connectionService: connectionService,
         commandService: commandService,
+        notificationService: notificationService,
       ),
     );
   }
