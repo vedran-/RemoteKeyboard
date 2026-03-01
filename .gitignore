@@ -73,12 +73,20 @@ yarn-error.log*
 
 # ============================================================================
 # PC Application (Rust + Tauri)
-# See pc/.gitignore for additional Rust-specific ignores
 # ============================================================================
 
 # Tauri build outputs
 pc/gen/
-pc/icons/
+
+# Tauri icons - allow source files, ignore generated
+pc/icons/*.ico
+pc/icons/*.png
+!pc/icons/icon.ico
+!pc/icons/32x32.png
+!pc/icons/128x128.png
+!pc/icons/128x128@2x.png
+!pc/icons/create_ico.py
+!pc/icons/README.md
 
 # Node modules (if using Tauri frontend)
 pc/node_modules/
