@@ -256,15 +256,15 @@ pub struct ProtocolMessage {
     /// Message type
     #[serde(rename = "type")]
     pub message_type: MessageType,
-    
+
     /// Message payload
     pub payload: serde_json::Value,
-    
+
     /// Timestamp in milliseconds since epoch
     pub timestamp: i64,
-    
+
     /// Optional message ID for correlation
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub id: Option<String>,
 }
 

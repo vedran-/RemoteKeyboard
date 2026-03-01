@@ -17,12 +17,14 @@ class HomeScreen extends StatefulWidget {
   final ConnectionService connectionService;
   final CommandService commandService;
   final NotificationService notificationService;
+  final ScreenStreamService screenStreamService;
 
   const HomeScreen({
     super.key,
     required this.connectionService,
     required this.commandService,
     required this.notificationService,
+    required this.screenStreamService,
   });
 
   @override
@@ -46,6 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
         commandService: widget.commandService,
         connectionService: widget.connectionService,
         notificationService: widget.notificationService,
+        screenStreamService: widget.screenStreamService,
       ),
       KeyboardScreen(
         commandService: widget.commandService,

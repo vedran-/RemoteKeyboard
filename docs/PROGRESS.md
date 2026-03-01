@@ -8,7 +8,60 @@
 
 ## 🎉 Latest Achievements
 
-### Aspect Ratio & Bandwidth Optimization (2026-03-01) ✅
+### Protocol Audit Complete (2026-03-01) ✅
+
+**Comprehensive verification of ALL message types:**
+- ✅ Mouse commands (move, click, scroll)
+- ✅ Keyboard commands (key_press, type_text)
+- ✅ Media commands (play_pause, volume, etc.)
+- ✅ Screen control (enable/disable, dimensions)
+- ✅ Screen frames (streaming from PC to mobile)
+- ✅ Heartbeat (PC → Mobile)
+- ✅ Heartbeat ack (Mobile → PC)
+- ✅ Connection accepted/rejected (PC → Mobile)
+- ✅ Error messages (PC → Mobile)
+
+**All Protocol Mismatches Fixed:**
+1. ✅ Heartbeat ack missing payload field
+2. ✅ Screen control custom format
+3. ✅ Screen frame direct format (not wrapped)
+4. ✅ ProtocolMessage `id` field optional
+
+**Documentation Created:**
+- `docs/PROTOCOL_AUDIT.md` - Complete message type verification
+
+**No more protocol mismatches expected!**
+
+---
+
+### Screen Frame Protocol Fix (Previous)
+
+**Problem Fixed:**
+- Screen capture wasn't displaying on mobile
+- Error: `WARN Failed to handle message: Protocol error: Invalid JSON: missing field 'payload'`
+
+**Root Cause:**
+- PC was wrapping screen frames in `ProtocolMessage` with `MessageType::Custom`
+- Mobile expected screen frames to be sent directly with `type: 'screen_frame'`
+- Protocol mismatch prevented frames from being parsed
+
+**Solution:**
+- PC now sends screen frames directly (not wrapped in ProtocolMessage)
+- Mobile listens for `type: 'screen_frame'` directly
+- Simplified protocol, fewer nested fields
+
+**Files Modified:**
+- `pc/src/infrastructure/websocket/server.rs` - Send screen_frame directly
+- `mobile/lib/application/services/screen_stream_service.dart` - Listen for screen_frame directly
+
+**Test Results:**
+- ✅ 119 PC tests passing
+- ✅ 99 mobile tests passing
+- ✅ Total: 218 tests passing
+
+---
+
+### Aspect Ratio & Bandwidth Optimization (Previous)
 
 **What Was Implemented:**
 - ✅ Client controls capture dimensions (WxH based on touchpad size)
@@ -41,7 +94,8 @@
 - **No stretching** - Image always maintains correct aspect ratio
 - **Ideal framing** - Capture area matches touchpad shape
 - **Bandwidth savings** - Server downscales large captures before sending
-- **Quality** - Lanczos3 filter for high-quality downscaling
+- **Performance** - Triangle filter (4x faster than Lanczos3, good quality)
+- **Optimization note** - Can upgrade to Hamming/Lanczos3 later if quality needed
 
 ---
 

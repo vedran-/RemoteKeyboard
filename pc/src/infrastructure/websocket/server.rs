@@ -205,114 +205,127 @@ async fn handle_connection(
             msg = reader.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
-                        // Try to parse as screen control first
-                        if let Ok(control) = serde_json::from_str::<ScreenControl>(&text) {
-                            // Handle screen control message
-                            if control.enabled && !screen_streaming_enabled {
-                                // Start streaming
-                                info!("Screen streaming enabled");
-                                screen_streaming_enabled = true;
+                        // Check message type by parsing JSON
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                            // Check if this is a screen control message (type: custom with screen control payload)
+                            if json.get("type").and_then(|v| v.as_str()) == Some("custom") {
+                                if let Some(payload) = json.get("payload") {
+                                    if let Ok(control) = serde_json::from_value::<ScreenControl>(payload.clone()) {
+                                        // Handle screen control message
+                                        if control.enabled && !screen_streaming_enabled {
+                                            // Start streaming
+                                            info!("Screen streaming enabled");
+                                            screen_streaming_enabled = true;
 
-                                // Initialize screen capture if not already done
-                                if screen_capture.is_none() {
-                                    match ScreenCaptureService::new() {
-                                        Ok(service) => {
-                                            screen_capture = Some(service);
+                                            // Initialize screen capture if not already done
+                                            if screen_capture.is_none() {
+                                                match ScreenCaptureService::new() {
+                                                    Ok(service) => {
+                                                        screen_capture = Some(service);
 
-                                            // Set capture dimensions if specified
-                                            if let (Some(width), Some(height)) = (control.capture_width, control.capture_height) {
-                                                if let Some(ref capture) = screen_capture {
-                                                    capture.set_capture_dimensions(width, height);
-                                                    info!("Capture dimensions set to {}x{}", width, height);
-                                                }
-                                            }
-
-                                            // Set max dimension for downscaling if specified
-                                            if let Some(max_dim) = control.max_dimension {
-                                                if let Some(ref capture) = screen_capture {
-                                                    capture.set_max_dimension(max_dim);
-                                                    info!("Max dimension set to {}", max_dim);
-                                                }
-                                            }
-
-                                            // Start screen streaming task
-                                            let capture: Option<ScreenCaptureService> = screen_capture.clone();
-                                            let tx = screen_tx.clone();
-                                            screen_stream_handle = Some(tokio::spawn(async move {
-                                                let mut interval = tokio::time::interval(
-                                                    tokio::time::Duration::from_millis(1000 / SCREEN_STREAM_FPS as u64)
-                                                );
-                                                loop {
-                                                    interval.tick().await;
-                                                    if let Some(ref capture) = capture {
-                                                        if let Ok(frame) = capture.capture_around_cursor() {
-                                                            let msg = ProtocolMessage::new(
-                                                                MessageType::Custom,
-                                                                serde_json::json!({
-                                                                    "type": "screen_frame",
-                                                                    "cursor_x": frame.cursor_x,
-                                                                    "cursor_y": frame.cursor_y,
-                                                                    "monitor_id": frame.monitor_id,
-                                                                    "capture_width": frame.capture_width,
-                                                                    "capture_height": frame.capture_height,
-                                                                    "data": frame.data,
-                                                                }),
-                                                                chrono::Utc::now().timestamp_millis(),
-                                                            );
-                                                            if let Ok(json) = serde_json::to_string(&msg) {
-                                                                if tx.send(json).await.is_err() {
-                                                                    break;
-                                                                }
+                                                        // Set capture dimensions if specified
+                                                        if let (Some(width), Some(height)) = (control.capture_width, control.capture_height) {
+                                                            if let Some(ref capture) = screen_capture {
+                                                                capture.set_capture_dimensions(width, height);
+                                                                info!("Capture dimensions set to {}x{}", width, height);
                                                             }
                                                         }
+
+                                                        // Set max dimension for downscaling if specified
+                                                        if let Some(max_dim) = control.max_dimension {
+                                                            if let Some(ref capture) = screen_capture {
+                                                                capture.set_max_dimension(max_dim);
+                                                                info!("Max dimension set to {}", max_dim);
+                                                            }
+                                                        }
+
+                                                        // Start screen streaming task
+                                                        let capture: Option<ScreenCaptureService> = screen_capture.clone();
+                                                        let tx = screen_tx.clone();
+                                                        screen_stream_handle = Some(tokio::spawn(async move {
+                                                            let mut interval = tokio::time::interval(
+                                                                tokio::time::Duration::from_millis(1000 / SCREEN_STREAM_FPS as u64)
+                                                            );
+                                                            loop {
+                                                                interval.tick().await;
+                                                                if let Some(ref capture) = capture {
+                                                                    if let Ok(frame) = capture.capture_around_cursor() {
+                                                                        // Send screen frame directly (not wrapped in ProtocolMessage)
+                                                                        let screen_msg = serde_json::json!({
+                                                                            "type": "screen_frame",
+                                                                            "cursor_x": frame.cursor_x,
+                                                                            "cursor_y": frame.cursor_y,
+                                                                            "monitor_id": frame.monitor_id,
+                                                                            "capture_width": frame.capture_width,
+                                                                            "capture_height": frame.capture_height,
+                                                                            "data": frame.data,
+                                                                        });
+                                                                        if let Ok(json) = serde_json::to_string(&screen_msg) {
+                                                                            if tx.send(json).await.is_err() {
+                                                                                break;
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }));
+                                                    }
+                                                    Err(e) => {
+                                                        error!("Failed to initialize screen capture: {}", e);
+                                                        screen_streaming_enabled = false;
                                                     }
                                                 }
-                                            }));
-                                        }
-                                        Err(e) => {
-                                            error!("Failed to initialize screen capture: {}", e);
+                                            }
+                                        } else if !control.enabled && screen_streaming_enabled {
+                                            // Stop streaming
+                                            info!("Screen streaming disabled");
                                             screen_streaming_enabled = false;
+                                            if let Some(handle) = screen_stream_handle.take() {
+                                                handle.abort();
+                                            }
                                         }
+
+                                        // Adjust capture dimensions if specified
+                                        if let (Some(width), Some(height)) = (control.capture_width, control.capture_height) {
+                                            if let Some(ref capture) = screen_capture {
+                                                capture.set_capture_dimensions(width, height);
+                                                info!("Capture dimensions adjusted to {}x{}", width, height);
+                                            }
+                                        }
+
+                                        // Adjust max dimension if specified
+                                        if let Some(max_dim) = control.max_dimension {
+                                            if let Some(ref capture) = screen_capture {
+                                                capture.set_max_dimension(max_dim);
+                                                info!("Max dimension adjusted to {}", max_dim);
+                                            }
+                                        }
+                                        continue;  // Skip ProtocolMessage parsing for screen control
                                     }
                                 }
-                            } else if !control.enabled && screen_streaming_enabled {
-                                // Stop streaming
-                                info!("Screen streaming disabled");
-                                screen_streaming_enabled = false;
-                                if let Some(handle) = screen_stream_handle.take() {
-                                    handle.abort();
-                                }
                             }
+                            
+                            // For messages with payload field, parse as ProtocolMessage (mouse/keyboard/media commands)
+                            if json.get("payload").is_some() {
+                                if let Err(e) = handle_message(&text, &command_tx) {
+                                    warn!("Failed to handle message: {}", e);
 
-                            // Adjust capture dimensions if specified
-                            if let (Some(width), Some(height)) = (control.capture_width, control.capture_height) {
-                                if let Some(ref capture) = screen_capture {
-                                    capture.set_capture_dimensions(width, height);
-                                    info!("Capture dimensions adjusted to {}x{}", width, height);
+                                    // Send error response
+                                    let error_msg = ProtocolMessage::new(
+                                        MessageType::Error,
+                                        serde_json::json!({
+                                            "code": "invalid_message",
+                                            "message": e.to_string()
+                                        }),
+                                        ProtocolMessage::now_timestamp(),
+                                    );
+
+                                    let _ = writer.send(Message::Text(serde_json::to_string(&error_msg).unwrap())).await;
                                 }
+                            } else {
+                                // This is a control message (heartbeat_ack, etc.) - just log it
+                                debug!("Received control message: {}", text);
                             }
-
-                            // Adjust max dimension if specified
-                            if let Some(max_dim) = control.max_dimension {
-                                if let Some(ref capture) = screen_capture {
-                                    capture.set_max_dimension(max_dim);
-                                    info!("Max dimension adjusted to {}", max_dim);
-                                }
-                            }
-                        } else if let Err(e) = handle_message(&text, &command_tx) {
-                            warn!("Failed to handle message: {}", e);
-
-                            // Send error response
-                            let error_msg = ProtocolMessage::new(
-                                MessageType::Error,
-                                serde_json::json!({
-                                    "code": "invalid_message",
-                                    "message": e.to_string()
-                                }),
-                                ProtocolMessage::now_timestamp(),
-                            );
-
-                            let _ = writer.send(Message::Text(serde_json::to_string(&error_msg).unwrap())).await;
                         }
                     }
                     Some(Ok(Message::Ping(data))) => {
@@ -368,9 +381,15 @@ async fn handle_connection(
 
 /// Handle an incoming message
 fn handle_message(text: &str, command_tx: &broadcast::Sender<IncomingCommand>) -> Result<()> {
+    // Debug: Log raw message
+    debug!("Received raw message: {}", text);
+    
     // Parse the message
     let msg: ProtocolMessage = serde_json::from_str(text)
-        .map_err(|e| Error::protocol(format!("Invalid JSON: {}", e)))?;
+        .map_err(|e| {
+            debug!("Failed to parse as ProtocolMessage: {}", e);
+            Error::protocol(format!("Invalid JSON: {}", e))
+        })?;
     
     // Convert to command based on message type
     let command = match msg.message_type {

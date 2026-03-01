@@ -52,7 +52,7 @@ RemoteKeyboard lets you control your PC (especially useful for PC connected to T
 - ✅ **Screen capture streaming** - Stream screen area around cursor (5 FPS, configurable zoom)
 - ✅ **Mobile screen display** - View PC screen in touchpad area with cursor indicator
 - ✅ **Aspect ratio preservation** - No stretching, black letterboxing
-- ✅ **Bandwidth optimization** - Server-side downscaling (max 400px)
+- ✅ **Bandwidth optimization** - Server-side downscaling (max 400px, Triangle filter)
 
 ---
 

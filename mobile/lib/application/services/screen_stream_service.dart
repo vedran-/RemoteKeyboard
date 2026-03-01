@@ -57,9 +57,9 @@ class ScreenStreamService extends ChangeNotifier {
 
     // Listen for screen frames
     _messageSubscription = _client.messages.listen((message) {
-      if (message['type'] == 'custom' && 
-          message['payload']?['type'] == 'screen_frame') {
-        _handleScreenFrame(message['payload']);
+      // Screen frames are sent directly with type 'screen_frame'
+      if (message['type'] == 'screen_frame') {
+        _handleScreenFrame(message);
       }
     });
 

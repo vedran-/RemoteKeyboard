@@ -193,7 +193,9 @@ class WebSocketClient {
 
     try {
       message['timestamp'] = DateTime.now().millisecondsSinceEpoch;
-      _channel!.sink.add(jsonEncode(message));
+      final json = jsonEncode(message);
+      print('[WebSocket] Sending raw message: $json');
+      _channel!.sink.add(json);
       print('[WebSocket] Sent raw message: ${message['type']}');
     } catch (e) {
       print('[WebSocket] Error sending raw message: $e');
