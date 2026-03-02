@@ -12,25 +12,7 @@ use tracing::{debug, info};
 use crate::application::ports::{Result, Error};
 use crate::domain::entities::command::ScreenFrame;
 use crate::infrastructure::screen_capture_utils::get_screen_area_around_cursor;
-
-/// Default capture size (width and height in pixels)
-#[allow(dead_code)]
-const DEFAULT_CAPTURE_SIZE: u32 = 200;
-
-/// Minimum capture size
-#[allow(dead_code)]
-const MIN_CAPTURE_SIZE: u32 = 100;
-
-/// Maximum capture size (can be overridden via config)
-#[allow(dead_code)]
-const MAX_CAPTURE_SIZE: u32 = 800;
-
-/// Default max dimension for downscaling (can be overridden via control message)
-const DEFAULT_MAX_DIMENSION: u32 = 800;
-
-/// JPEG quality (0-100)
-#[allow(dead_code)]
-const JPEG_QUALITY: u8 = 75;
+use crate::infrastructure::config::AppConfig;
 
 /// Screen capture service
 #[derive(Clone)]
@@ -43,11 +25,20 @@ pub struct ScreenCaptureService {
 impl ScreenCaptureService {
     /// Create new screen capture service
     pub fn new() -> Result<Self> {
+        // Load configuration
+        let config = AppConfig::load();
+        let max_dim = config.screen_capture.max_dimension;
+        let default_w = config.screen_capture.default_width;
+        let default_h = config.screen_capture.default_height;
+        
         info!("Screen capture initialized (Windows Graphics Capture API)");
+        info!("Using max_dimension={}, default capture={}x{}", 
+              max_dim, default_w, default_h);
+        
         Ok(ScreenCaptureService {
-            capture_width: Arc::new(Mutex::new(200)),
-            capture_height: Arc::new(Mutex::new(200)),
-            max_dimension: Arc::new(Mutex::new(DEFAULT_MAX_DIMENSION)),
+            capture_width: Arc::new(Mutex::new(default_w)),
+            capture_height: Arc::new(Mutex::new(default_h)),
+            max_dimension: Arc::new(Mutex::new(max_dim)),
         })
     }
 

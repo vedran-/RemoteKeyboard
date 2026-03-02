@@ -66,12 +66,12 @@ config = "0.14"
 # Hostname
 hostname = "0.4"
 
+# Arc and sync
+parking_lot = "0.12"
+
 # Futures
 futures = "0.3"
 futures-util = "0.3"
-
-# Arc and sync
-parking_lot = "0.12"
 
 # Async trait
 async-trait = "0.1"

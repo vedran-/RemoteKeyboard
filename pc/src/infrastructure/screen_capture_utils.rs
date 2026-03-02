@@ -20,20 +20,20 @@ use windows_capture::{
 #[cfg(target_os = "windows")]
 use winapi::{
     shared::windef::{POINT, RECT, HMONITOR},
-    um::winuser::{GetCursorPos, GetMonitorInfoW, MonitorFromPoint, EnumDisplayMonitors, MONITORINFOEXW, MONITOR_DEFAULTTONEAREST},
+    um::winuser::{GetCursorPos, GetMonitorInfoW, MonitorFromPoint, MONITORINFOEXW, MONITOR_DEFAULTTONEAREST},
 };
 #[cfg(target_os = "windows")]
 use std::ffi::c_void;
-#[cfg(target_os = "windows")]
-use std::collections::HashSet;
 
-// Callback data for EnumDisplayMonitors
+// Callback data for EnumDisplayMonitors (not currently used - grid sampling instead)
+#[allow(dead_code)]
 #[cfg(target_os = "windows")]
 struct MonitorEnumData {
     monitors: Vec<(HMONITOR, RECT)>,
 }
 
-// Callback function for EnumDisplayMonitors
+// Callback function for EnumDisplayMonitors (not currently used - grid sampling instead)
+#[allow(dead_code)]
 #[cfg(target_os = "windows")]
 unsafe extern "system" fn monitor_enum_proc(
     hmonitor: HMONITOR,
@@ -64,8 +64,6 @@ fn get_all_monitors() -> Result<Vec<(Monitor, i32, i32, i32, i32)>, Box<dyn std:
     unsafe {
         // Enumerate all monitors using Windows API
         // Use a simple loop with MonitorFromPoint instead of callback
-        let mut x = -10000;
-        let mut y = -10000;
         let mut seen_monitors = std::collections::HashSet::new();
         
         // Sample points in a grid to find all monitors
@@ -113,6 +111,7 @@ fn get_all_monitors() -> Result<Vec<(Monitor, i32, i32, i32, i32)>, Box<dyn std:
 // --- DATA STRUCTURES ---
 
 #[derive(Clone)]
+#[allow(dead_code)]  // Used for future multi-monitor enhancements
 struct CaptureRequest {
     global_x: i32,
     global_y: i32,
@@ -244,6 +243,7 @@ fn get_cursor_position() -> Result<(i32, i32), Box<dyn std::error::Error>> {
 
 /// Get monitor at cursor position with its bounds
 /// Returns (Monitor, left, top, right, bottom) in virtual screen coordinates
+#[allow(dead_code)]  // Used for single-monitor fallback
 fn get_monitor_at_cursor() -> Result<(Monitor, i32, i32, i32, i32), Box<dyn std::error::Error>> {
     // Get cursor position
     let (cursor_x, cursor_y) = get_cursor_position()?;
@@ -363,6 +363,8 @@ pub fn get_screen_area_around_cursor(
     // 4. Find all monitors that intersect with capture region
     let mut relevant_monitors = Vec::new();
     
+    tracing::info!("Checking {} monitor(s) for intersection with capture region", all_monitors.len());
+    
     for (monitor, m_left, m_top, m_right, m_bottom) in all_monitors {
         // Check if capture REGION intersects with this monitor
         // NOT cursor position - the capture area can span multiple monitors!
@@ -372,6 +374,9 @@ pub fn get_screen_area_around_cursor(
             capture_bottom_logical <= m_top ||  // Capture is entirely above
             capture_top_logical >= m_bottom     // Capture is entirely below
         );
+        
+        tracing::info!("Monitor ({},{})-({},{}) intersects={}", 
+                      m_left, m_top, m_right, m_bottom, intersects);
         
         if intersects {
             // Calculate DPI scale for this monitor
