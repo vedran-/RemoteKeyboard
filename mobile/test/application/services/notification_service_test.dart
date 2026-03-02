@@ -1,6 +1,8 @@
 /// Tests for NotificationService
 ///
 /// Verifies notification configuration and behavior.
+/// Note: Tests for NotificationService with settings require integration tests
+/// due to SharedPreferences dependency.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:remote_keyboard_mobile/application/services/notification_service.dart';
@@ -88,4 +90,7 @@ void main() {
       expect(NotificationType.values, contains(NotificationType.persistent));
     });
   });
+
+  // Note: Integration tests for NotificationService with settings
+  // are in test/integration/notification_flow_test.dart
 }

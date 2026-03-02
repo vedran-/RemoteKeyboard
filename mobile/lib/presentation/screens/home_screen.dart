@@ -12,6 +12,7 @@ import 'touchpad_screen.dart';
 import 'keyboard_screen.dart';
 import 'media_screen.dart';
 import 'connection_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final ConnectionService connectionService;
@@ -95,6 +96,26 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(
             icon: Icon(Icons.music_note),
             label: 'Media',
+          ),
+        ],
+      ),
+      appBar: _selectedIndex == 0 ? null : AppBar(
+        title: _selectedIndex == 1 ? const Text('Touchpad') :
+               _selectedIndex == 2 ? const Text('Keyboard') :
+               const Text('Media'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => SettingsScreen(
+                    notificationService: widget.notificationService,
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),

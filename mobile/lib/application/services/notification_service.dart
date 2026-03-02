@@ -2,10 +2,13 @@
 ///
 /// Manages in-app notifications (scaffold messages).
 /// Ensures only one notification is shown at a time with proper timing.
+/// Respects user preferences for non-error notifications.
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../../infrastructure/config/connection_preferences.dart';
 
 /// Notification types with different auto-dismiss durations
 enum NotificationType {
@@ -103,39 +106,88 @@ class NotificationConfig {
 class NotificationService extends ChangeNotifier {
   NotificationConfig? _currentNotification;
   Timer? _dismissTimer;
-  
+  final ConnectionPreferences _preferences = ConnectionPreferences();
+  bool _isLoadingSettings = true;
+  bool _infoEnabled = false;
+  bool _successEnabled = false;
+  bool _commandEnabled = false;
+
   /// Current notification (if any)
   NotificationConfig? get currentNotification => _currentNotification;
-  
+
   /// Whether a notification is currently showing
   bool get isShowing => _currentNotification != null;
-  
+
+  /// Initialize settings (call this at app startup)
+  Future<void> initialize() async {
+    _infoEnabled = await _preferences.isInfoNotificationsEnabled();
+    _successEnabled = await _preferences.isSuccessNotificationsEnabled();
+    _commandEnabled = await _preferences.isCommandNotificationsEnabled();
+    _isLoadingSettings = false;
+  }
+
+  /// Reload settings (call after user changes settings)
+  Future<void> reloadSettings() async {
+    _infoEnabled = await _preferences.isInfoNotificationsEnabled();
+    _successEnabled = await _preferences.isSuccessNotificationsEnabled();
+    _commandEnabled = await _preferences.isCommandNotificationsEnabled();
+  }
+
   /// Show a notification
-  /// 
+  ///
   /// Automatically dismisses any previous notification
+  /// For non-error notifications, checks user preferences first
   void show(
     BuildContext context,
     String message, {
     NotificationType type = NotificationType.info,
     Duration? duration,
   }) {
+    // Check if this notification type should be shown based on user preferences
+    // Error and persistent notifications are always shown
+    // While settings are loading, show notifications
+    if (!_isLoadingSettings && !_shouldShowNotification(type)) {
+      return; // Skip showing this notification
+    }
+
     // Dismiss any existing notification
     dismiss();
-    
+
     // Create new notification
     _currentNotification = NotificationConfig(
       message: message,
       type: type,
       duration: duration,
     );
-    
+
     notifyListeners();
-    
+
     // Auto-dismiss after duration (unless persistent)
     if (type != NotificationType.persistent) {
       _dismissTimer = Timer(_currentNotification!.effectiveDuration, () {
         dismiss();
       });
+    }
+  }
+
+  /// Check if notification of given type should be shown based on user preferences
+  bool _shouldShowNotification(NotificationType type) {
+    switch (type) {
+      case NotificationType.info:
+        return _infoEnabled;
+      case NotificationType.success:
+        return _successEnabled;
+      case NotificationType.command:
+        return _commandEnabled;
+      case NotificationType.warning:
+        // Warnings are always shown (potentially important)
+        return true;
+      case NotificationType.error:
+        // Errors are always shown
+        return true;
+      case NotificationType.persistent:
+        // Persistent notifications are always shown
+        return true;
     }
   }
   
@@ -146,33 +198,33 @@ class NotificationService extends ChangeNotifier {
     _currentNotification = null;
     notifyListeners();
   }
-  
-  /// Show info notification
+
+  /// Show info notification (respects user preferences)
   void info(BuildContext context, String message, {Duration? duration}) {
     show(context, message, type: NotificationType.info, duration: duration);
   }
-  
-  /// Show success notification
+
+  /// Show success notification (respects user preferences)
   void success(BuildContext context, String message, {Duration? duration}) {
     show(context, message, type: NotificationType.success, duration: duration);
   }
-  
-  /// Show warning notification
+
+  /// Show warning notification (always shown)
   void warning(BuildContext context, String message, {Duration? duration}) {
     show(context, message, type: NotificationType.warning, duration: duration);
   }
-  
-  /// Show error notification
+
+  /// Show error notification (always shown)
   void error(BuildContext context, String message, {Duration? duration}) {
     show(context, message, type: NotificationType.error, duration: duration);
   }
-  
-  /// Show command confirmation (short duration)
+
+  /// Show command confirmation (respects user preferences)
   void command(BuildContext context, String message) {
     show(context, message, type: NotificationType.command);
   }
-  
-  /// Show persistent notification (must be dismissed manually)
+
+  /// Show persistent notification (always shown)
   void persistent(BuildContext context, String message) {
     show(context, message, type: NotificationType.persistent);
   }

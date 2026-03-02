@@ -11,6 +11,11 @@ import '../../domain/entities/device.dart';
 class ConnectionPreferences {
   static const String _lastDeviceKey = 'last_connected_device';
   static const String _autoReconnectKey = 'auto_reconnect_enabled';
+  
+  // Notification settings
+  static const String _enableInfoNotificationsKey = 'enable_info_notifications';
+  static const String _enableSuccessNotificationsKey = 'enable_success_notifications';
+  static const String _enableCommandNotificationsKey = 'enable_command_notifications';
 
   /// Save last connected device
   Future<void> saveLastConnectedDevice(Device device) async {
@@ -29,7 +34,7 @@ class ConnectionPreferences {
   Future<Device?> getLastConnectedDevice() async {
     final prefs = await SharedPreferences.getInstance();
     final deviceJsonString = prefs.getString(_lastDeviceKey);
-    
+
     if (deviceJsonString == null) {
       return null;
     }
@@ -68,5 +73,43 @@ class ConnectionPreferences {
   Future<void> setAutoReconnectEnabled(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_autoReconnectKey, enabled);
+  }
+  
+  // ==================== Notification Settings ====================
+  
+  /// Check if info notifications are enabled (default: false)
+  Future<bool> isInfoNotificationsEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_enableInfoNotificationsKey) ?? false;
+  }
+  
+  /// Set info notifications enabled
+  Future<void> setInfoNotificationsEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_enableInfoNotificationsKey, enabled);
+  }
+  
+  /// Check if success notifications are enabled (default: false)
+  Future<bool> isSuccessNotificationsEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_enableSuccessNotificationsKey) ?? false;
+  }
+  
+  /// Set success notifications enabled
+  Future<void> setSuccessNotificationsEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_enableSuccessNotificationsKey, enabled);
+  }
+  
+  /// Check if command notifications are enabled (default: false)
+  Future<bool> isCommandNotificationsEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_enableCommandNotificationsKey) ?? false;
+  }
+  
+  /// Set command notifications enabled
+  Future<void> setCommandNotificationsEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_enableCommandNotificationsKey, enabled);
   }
 }

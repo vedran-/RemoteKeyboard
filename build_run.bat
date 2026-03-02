@@ -17,6 +17,7 @@ REM   build_run.bat build-run-all - Build all + Run both (PC + Windows)
 REM   build_run.bat debug-client - Run Windows client in debug mode (flutter run -d windows)
 REM   build_run.bat test-server  - Run Python test server (for debugging)
 REM   build_run.bat clean        - Clean all builds
+REM   build_run.bat install-android - Install APK to Android device via ADB
 REM ============================================================================
 
 cd /d "%~dp0"
@@ -34,6 +35,7 @@ if "%1"=="build-run-all" goto :build_and_run_all
 if "%1"=="debug-client" goto :debug_client
 if "%1"=="test-server" goto :test_server
 if "%1"=="clean" goto :clean
+if "%1"=="install-android" goto :install_android
 
 echo Unknown command: %1
 echo Run 'build_run.bat' for usage.
@@ -57,6 +59,7 @@ echo   build_run.bat build-run-all - Build all + Run both (PC + Windows)
 echo   build_run.bat debug-client - Run Windows client in debug mode (flutter run -d windows)
 echo   build_run.bat test-server  - Run Python test server (for debugging)
 echo   build_run.bat clean        - Clean all builds
+echo   build_run.bat install-android - Install APK to Android device via ADB
 echo.
 goto :eof
 
@@ -124,6 +127,18 @@ if errorlevel 1 (
 )
 cd ..
 echo Android APK built successfully!
+goto :eof
+
+:install_android
+echo.
+echo Installing APK to Android Device...
+echo ============================================
+adb install -r mobile\build\app\outputs\flutter-apk\app-debug.apk
+if errorlevel 1 (
+    echo ERROR: Installation failed!
+    exit /b 1
+)
+echo APK installed successfully!
 goto :eof
 
 :build_and_run_all

@@ -9,34 +9,54 @@ import 'application/services/services.dart';
 import 'presentation/screens/home_screen.dart';
 import 'presentation/theme/app_theme.dart';
 
-void main() {
-  runApp(const RemoteKeyboardApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize services
+  final connectionService = ConnectionService();
+  final commandService = CommandService(
+    connectionService.client,
+    connectionService,
+  );
+  final notificationService = NotificationService();
+  
+  // Initialize notification settings
+  await notificationService.initialize();
+  
+  final screenStreamService = ScreenStreamService(
+    connectionService.client,
+    onError: (message, {String? title, bool isError = false}) {
+      // Note: Errors are always shown, regardless of notification settings
+      // We can't show notifications here without a BuildContext, so these
+      // errors will be shown when there's an active context (e.g., from WebSocket)
+      debugPrint('[ScreenStream] ${isError ? "ERROR" : "INFO"}: $message');
+    },
+  );
+
+  runApp(RemoteKeyboardApp(
+    connectionService: connectionService,
+    commandService: commandService,
+    notificationService: notificationService,
+    screenStreamService: screenStreamService,
+  ));
 }
 
 class RemoteKeyboardApp extends StatelessWidget {
-  const RemoteKeyboardApp({super.key});
+  final ConnectionService connectionService;
+  final CommandService commandService;
+  final NotificationService notificationService;
+  final ScreenStreamService screenStreamService;
+
+  const RemoteKeyboardApp({
+    super.key,
+    required this.connectionService,
+    required this.commandService,
+    required this.notificationService,
+    required this.screenStreamService,
+  });
 
   @override
   Widget build(BuildContext context) {
-    // Initialize services
-    final connectionService = ConnectionService();
-    final commandService = CommandService(
-      connectionService.client,
-      connectionService,
-    );
-    final notificationService = NotificationService();
-    final screenStreamService = ScreenStreamService(
-      connectionService.client,
-      onError: (message, {String? title, bool isError = false}) {
-        // Show error as notification
-        if (isError) {
-          notificationService.error(context, message);
-        } else {
-          notificationService.info(context, message);
-        }
-      },
-    );
-
     return MaterialApp(
       title: 'RemoteKeyboard',
       debugShowCheckedModeBanner: false,
