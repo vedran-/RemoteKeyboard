@@ -1,9 +1,11 @@
 /// Home Screen - Main navigation
 ///
 /// Provides tabs for:
+/// - Connect
 /// - Touchpad
 /// - Keyboard
-/// - Media Keys
+/// - Media
+/// - Settings
 
 import 'package:flutter/material.dart';
 
@@ -61,6 +63,9 @@ class _HomeScreenState extends State<HomeScreen> {
         connectionService: widget.connectionService,
         notificationService: widget.notificationService,
       ),
+      SettingsScreen(
+        notificationService: widget.notificationService,
+      ),
     ];
   }
 
@@ -97,25 +102,9 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.music_note),
             label: 'Media',
           ),
-        ],
-      ),
-      appBar: _selectedIndex == 0 ? null : AppBar(
-        title: _selectedIndex == 1 ? const Text('Touchpad') :
-               _selectedIndex == 2 ? const Text('Keyboard') :
-               const Text('Media'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => SettingsScreen(
-                    notificationService: widget.notificationService,
-                  ),
-                ),
-              );
-            },
+          NavigationDestination(
+            icon: Icon(Icons.settings),
+            label: 'Settings',
           ),
         ],
       ),

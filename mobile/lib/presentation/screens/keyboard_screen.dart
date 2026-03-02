@@ -168,59 +168,12 @@ class _KeyboardScreenState extends State<KeyboardScreen> {
                         ]),
                         const SizedBox(height: 16),
 
-                        // Arrow keys in inverted T layout
+                        // Arrow keys
                         _buildArrowKeys(),
-                        const SizedBox(height: 16),
-
-                        // Special action keys
-                        _buildKeyRow([
-                          ('Tab', 'Tab'),
-                          ('Caps', 'CapsLock'),
-                          ('Shift', 'Shift'),
-                          ('Ctrl', 'Control'),
-                          ('Alt', 'Alt'),
-                          ('Win', 'Meta'),
-                        ]),
                       ],
                     ),
                   ),
                 ),
-              ] else ...[
-                // Compact special keys
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ElevatedButton(
-                        onPressed: isDisconnected ? null : () => _sendKey('Enter'),
-                        child: const Text('Enter'),
-                      ),
-                      ElevatedButton(
-                        onPressed: isDisconnected ? null : () => _sendKey('Backspace'),
-                        child: const Text('⌫'),
-                      ),
-                      ElevatedButton(
-                        onPressed: isDisconnected ? null : () => _sendKey('Tab'),
-                        child: const Text('Tab'),
-                      ),
-                      ElevatedButton(
-                        onPressed: isDisconnected ? null : () => _sendKey('Escape'),
-                        child: const Text('Esc'),
-                      ),
-                      ElevatedButton(
-                        onPressed: isDisconnected ? null : () => _sendKey(' '),
-                        child: const Text('Space'),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Arrow keys
-                _buildArrowKeys(),
               ],
             ],
           ),
@@ -240,16 +193,9 @@ class _KeyboardScreenState extends State<KeyboardScreen> {
             child: ElevatedButton(
               onPressed: () => _sendKey(value),
               style: ElevatedButton.styleFrom(
-                padding: EdgeInsets.symmetric(
-                  vertical: compact ? 8 : 12,
-                  horizontal: 4,
-                ),
-                minimumSize: Size(0, compact ? 36 : 48),
+                fixedSize: Size(compact ? 50 : 60, compact ? 50 : 60),
               ),
-              child: Text(
-                label,
-                style: TextStyle(fontSize: compact ? 12 : null),
-              ),
+              child: Text(label, style: TextStyle(fontSize: compact ? 12 : 14)),
             ),
           ),
         );
@@ -263,6 +209,7 @@ class _KeyboardScreenState extends State<KeyboardScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            const SizedBox(width: 60),
             ElevatedButton(
               onPressed: () => _sendKey('ArrowUp'),
               style: ElevatedButton.styleFrom(
@@ -270,6 +217,7 @@ class _KeyboardScreenState extends State<KeyboardScreen> {
               ),
               child: const Icon(Icons.keyboard_arrow_up),
             ),
+            const SizedBox(width: 60),
           ],
         ),
         Row(

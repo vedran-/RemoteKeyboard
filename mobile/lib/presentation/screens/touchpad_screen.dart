@@ -31,7 +31,7 @@ class TouchpadScreen extends StatefulWidget {
 
 class _TouchpadScreenState extends State<TouchpadScreen> {
   String _sensitivityLevel = 'Normal';
-  
+
   // Store touchpad container dimensions for screen streaming
   double? _touchpadWidth;
   double? _touchpadHeight;
@@ -200,7 +200,7 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
                 // Measure actual touchpad container size (minus margins)
                 _touchpadWidth = constraints.maxWidth - 32; // 16px margin on each side
                 _touchpadHeight = constraints.maxHeight - 32;
-                
+
                 return ListenableBuilder(
                   listenable: widget.screenStreamService,
                   builder: (context, _) {
