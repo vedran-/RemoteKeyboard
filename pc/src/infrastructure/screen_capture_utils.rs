@@ -324,21 +324,21 @@ pub fn get_screen_area_around_cursor(
     tracing::info!("Capture request: {}x{}", width, height);
 
     // 1. Get cursor position in LOGICAL coordinates (Windows API)
-    let (cursor_x_logical, cursor_y_logical) = get_cursor_position()?;
-    tracing::info!("Cursor position (logical): ({}, {})", cursor_x_logical, cursor_y_logical);
+    let (cursor_logical_x, cursor_logical_y) = get_cursor_position()?;
+    tracing::info!("Cursor position (logical): ({}, {})", cursor_logical_x, cursor_logical_y);
 
     // 2. Get ALL monitors with their bounds
     let all_monitors = get_all_monitors()?;
     tracing::info!("Found {} monitor(s)", all_monitors.len());
     
-    // Find the cursor's monitor to get reference scale
-    let cursor_monitor = all_monitors.iter()
+    // 3. Find cursor's monitor and get its scale (this is our reference scale)
+    let cursor_monitor_info = all_monitors.iter()
         .find(|(_, m_left, m_top, m_right, m_bottom)| {
-            cursor_x_logical >= *m_left && cursor_x_logical < *m_right &&
-            cursor_y_logical >= *m_top && cursor_y_logical < *m_bottom
+            cursor_logical_x >= *m_left && cursor_logical_x < *m_right &&
+            cursor_logical_y >= *m_top && cursor_logical_y < *m_bottom
         });
     
-    let (cursor_scale_x, cursor_scale_y) = cursor_monitor
+    let (cursor_scale_x, cursor_scale_y) = cursor_monitor_info
         .map(|(monitor, m_left, m_top, m_right, m_bottom)| {
             let logical_w = (m_right - m_left) as f32;
             let logical_h = (m_bottom - m_top) as f32;
@@ -350,67 +350,87 @@ pub fn get_screen_area_around_cursor(
     
     tracing::info!("Cursor monitor scale: ({:.2}, {:.2})", cursor_scale_x, cursor_scale_y);
     
-    // 3. Calculate capture region in LOGICAL coordinates (centered on cursor)
-    let capture_left_logical = cursor_x_logical - (width as i32 / 2);
-    let capture_top_logical = cursor_y_logical - (height as i32 / 2);
-    let capture_right_logical = capture_left_logical + width as i32;
-    let capture_bottom_logical = capture_top_logical + height as i32;
+    // 4. Convert cursor to PHYSICAL coordinates
+    let cursor_phys_x = (cursor_logical_x as f32 * cursor_scale_x) as i32;
+    let cursor_phys_y = (cursor_logical_y as f32 * cursor_scale_y) as i32;
     
-    tracing::info!("Capture region (logical): ({},{}) to ({},{})", 
-                  capture_left_logical, capture_top_logical,
-                  capture_right_logical, capture_bottom_logical);
+    tracing::info!("Cursor position (physical): ({}, {})", cursor_phys_x, cursor_phys_y);
+    
+    // 5. Define capture region in PHYSICAL coordinates (centered on cursor)
+    let capture_left_phys = cursor_phys_x - (width as i32 / 2);
+    let capture_top_phys = cursor_phys_y - (height as i32 / 2);
+    let capture_right_phys = capture_left_phys + width as i32;
+    let capture_bottom_phys = capture_top_phys + height as i32;
+    
+    tracing::info!("Capture region (physical): ({},{}) to ({},{})", 
+                  capture_left_phys, capture_top_phys,
+                  capture_right_phys, capture_bottom_phys);
 
-    // 4. Find all monitors that intersect with capture region
+    // 6. Find all monitors that intersect with capture region (in PHYSICAL coords)
     let mut relevant_monitors = Vec::new();
     
     tracing::info!("Checking {} monitor(s) for intersection with capture region", all_monitors.len());
     
-    for (monitor, m_left, m_top, m_right, m_bottom) in all_monitors {
-        // Check if capture REGION intersects with this monitor
-        // NOT cursor position - the capture area can span multiple monitors!
+    for (monitor, m_left_logical, m_top_logical, m_right_logical, m_bottom_logical) in all_monitors {
+        // Get this monitor's scale and physical bounds
+        let monitor_logical_width = m_right_logical - m_left_logical;
+        let monitor_logical_height = m_bottom_logical - m_top_logical;
+        let monitor_physical_width = monitor.width()? as i32;
+        let monitor_physical_height = monitor.height()? as i32;
+        let scale_x = monitor_physical_width as f32 / monitor_logical_width as f32;
+        let scale_y = monitor_physical_height as f32 / monitor_logical_height as f32;
+        
+        // Monitor's physical bounds in global physical coordinate space
+        // For simplicity, we treat each monitor's physical space as starting at (0,0) for that monitor
+        // But we need to track the global physical position for proper stitching
+        
+        // The monitor's top-left in global physical coords
+        let monitor_phys_left = (m_left_logical as f32 * scale_x) as i32;
+        let monitor_phys_top = (m_top_logical as f32 * scale_y) as i32;
+        let monitor_phys_right = monitor_phys_left + monitor_physical_width;
+        let monitor_phys_bottom = monitor_phys_top + monitor_physical_height;
+        
+        tracing::info!("Monitor: logical=({},{})-({},{}) physical=({},{})-({},{}) scale=({:.2},{:.2})",
+                      m_left_logical, m_top_logical, m_right_logical, m_bottom_logical,
+                      monitor_phys_left, monitor_phys_top, monitor_phys_right, monitor_phys_bottom,
+                      scale_x, scale_y);
+        
+        // Check if capture region (in physical coords) intersects with this monitor's physical bounds
         let intersects = !(
-            capture_right_logical <= m_left ||  // Capture is entirely to the left
-            capture_left_logical >= m_right ||  // Capture is entirely to the right
-            capture_bottom_logical <= m_top ||  // Capture is entirely above
-            capture_top_logical >= m_bottom     // Capture is entirely below
+            capture_right_phys <= monitor_phys_left ||   // Capture is entirely to the left
+            capture_left_phys >= monitor_phys_right ||   // Capture is entirely to the right
+            capture_bottom_phys <= monitor_phys_top ||   // Capture is entirely above
+            capture_top_phys >= monitor_phys_bottom      // Capture is entirely below
         );
         
-        tracing::info!("Monitor logical=({},{})-({},{}) intersects={}", 
-                      m_left, m_top, m_right, m_bottom, intersects);
+        tracing::info!("  Capture physical=({},{})-({},{}) intersects={}",
+                      capture_left_phys, capture_top_phys,
+                      capture_right_phys, capture_bottom_phys,
+                      intersects);
         
         if intersects {
-            // Calculate DPI scale for this monitor
-            let monitor_logical_width = m_right - m_left;
-            let monitor_logical_height = m_bottom - m_top;
-            let monitor_physical_width = monitor.width()? as i32;
-            let monitor_physical_height = monitor.height()? as i32;
-            let scale_x = monitor_physical_width as f32 / monitor_logical_width as f32;
-            let scale_y = monitor_physical_height as f32 / monitor_logical_height as f32;
+            // Calculate overlap in PHYSICAL coordinates
+            let overlap_left = capture_left_phys.max(monitor_phys_left);
+            let overlap_top = capture_top_phys.max(monitor_phys_top);
+            let overlap_right = capture_right_phys.min(monitor_phys_right);
+            let overlap_bottom = capture_bottom_phys.min(monitor_phys_bottom);
             
-            tracing::info!("Monitor: logical=({},{})-({},{}) physical={}x{} scale=({:.2},{:.2})",
-                          m_left, m_top, m_right, m_bottom,
-                          monitor_physical_width, monitor_physical_height,
-                          scale_x, scale_y);
+            // Crop region is the overlap, relative to this monitor's origin (in physical coords)
+            let physical_crop_x = overlap_left - monitor_phys_left;
+            let physical_crop_y = overlap_top - monitor_phys_top;
+            let physical_crop_w = (overlap_right - overlap_left) as u32;
+            let physical_crop_h = (overlap_bottom - overlap_top) as u32;
             
-            // Calculate overlap between capture region and this monitor (in logical coords)
-            let overlap_left = capture_left_logical.max(m_left);
-            let overlap_top = capture_top_logical.max(m_top);
-            let overlap_right = capture_right_logical.min(m_right);
-            let overlap_bottom = capture_bottom_logical.min(m_bottom);
+            // Canvas position: where does this monitor's portion go on final image?
+            // We need to convert from global physical to canvas coordinates
+            // Canvas is in "cursor scale" logical coordinates
+            let canvas_x = ((overlap_left - capture_left_phys) as f32 / cursor_scale_x).round().max(0.0) as u32;
+            let canvas_y = ((overlap_top - capture_top_phys) as f32 / cursor_scale_y).round().max(0.0) as u32;
             
-            // Convert overlap to PHYSICAL coordinates (relative to monitor origin)
-            let physical_crop_x = ((overlap_left - m_left) as f32 * scale_x) as i32;
-            let physical_crop_y = ((overlap_top - m_top) as f32 * scale_y) as i32;
-            let physical_crop_w = ((overlap_right - overlap_left) as f32 * scale_x) as u32;
-            let physical_crop_h = ((overlap_bottom - overlap_top) as f32 * scale_y) as u32;
-            
-            // Calculate where this portion goes on the final canvas (in LOGICAL coordinates)
-            let canvas_x = (overlap_left - capture_left_logical).max(0) as u32;
-            let canvas_y = (overlap_top - capture_top_logical).max(0) as u32;
-            
-            tracing::info!("  Overlap: logical=({},{})-({},{}) physical=({},{}) {}x{} canvas=({},{})",
+            tracing::info!("  Overlap: physical=({},{})-({},{}) crop=({},{}) {}x{} canvas=({},{})",
                           overlap_left, overlap_top, overlap_right, overlap_bottom,
-                          physical_crop_x, physical_crop_y, physical_crop_w, physical_crop_h,
+                          physical_crop_x, physical_crop_y,
+                          physical_crop_w, physical_crop_h,
                           canvas_x, canvas_y);
             
             relevant_monitors.push((
