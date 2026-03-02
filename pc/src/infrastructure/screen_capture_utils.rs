@@ -88,11 +88,19 @@ impl GraphicsCaptureApiHandler for SingleFrameHandler {
             frame_width, frame_height, mw, mh, full_pixels.len(), calc_bpp
         );
         
-        // Crop to requested region using ACTUAL frame dimensions
+        // crop_x, crop_y are already in PHYSICAL coordinates (relative to monitor origin)
+        // Just need to ensure they're within frame bounds
+        let physical_crop_x = crop_x.max(0).min(frame_width as i32 - crop_w as i32);
+        let physical_crop_y = crop_y.max(0).min(frame_height as i32 - crop_h as i32);
+        
+        tracing::debug!("Crop (physical): ({},{}) size={}x{}",
+                       physical_crop_x, physical_crop_y, crop_w, crop_h);
+        
+        // Crop to requested region using PHYSICAL coordinates
         let crop_pixels = crop_image(
             &full_pixels,
             frame_width, frame_height,
-            crop_x - mx, crop_y - my,  // Convert to monitor-relative coordinates
+            physical_crop_x, physical_crop_y,
             crop_w, crop_h,
             calc_bpp as u32,
         );
@@ -227,48 +235,75 @@ pub fn get_screen_area_around_cursor(
 ) -> Result<RgbaImage, Box<dyn std::error::Error>> {
     tracing::info!("Capture request: {}x{}", width, height);
     
-    // 1. Get cursor position
-    let (cursor_x, cursor_y) = get_cursor_position()?;
-    tracing::info!("Cursor position: ({}, {})", cursor_x, cursor_y);
+    // 1. Get cursor position in LOGICAL coordinates (Windows API)
+    let (cursor_x_logical, cursor_y_logical) = get_cursor_position()?;
+    tracing::info!("Cursor position (logical): ({}, {})", cursor_x_logical, cursor_y_logical);
     
+    // 2. Get monitor at cursor with its LOGICAL bounds
+    let (monitor, m_left, m_top, m_right, m_bottom) = get_monitor_at_cursor()?;
+    
+    // 3. Get monitor's PHYSICAL dimensions from windows-capture
+    let monitor_physical_width = monitor.width()? as i32;
+    let monitor_physical_height = monitor.height()? as i32;
+    
+    // 4. Calculate DPI scale factor (physical / logical)
+    let monitor_logical_width = m_right - m_left;
+    let monitor_logical_height = m_bottom - m_top;
+    let scale_x = monitor_physical_width as f32 / monitor_logical_width as f32;
+    let scale_y = monitor_physical_height as f32 / monitor_logical_height as f32;
+    
+    tracing::info!("Monitor: logical={}x{}, physical={}x{}, scale=({:.2}, {:.2})",
+                  monitor_logical_width, monitor_logical_height,
+                  monitor_physical_width, monitor_physical_height,
+                  scale_x, scale_y);
+    
+    // 5. Convert cursor from logical to PHYSICAL coordinates (relative to monitor)
+    let cursor_x_physical = ((cursor_x_logical - m_left) as f32 * scale_x) as i32;
+    let cursor_y_physical = ((cursor_y_logical - m_top) as f32 * scale_y) as i32;
+    
+    tracing::info!("Cursor position (physical, relative to monitor): ({}, {})", 
+                  cursor_x_physical, cursor_y_physical);
+    
+    // 6. Calculate capture region in PHYSICAL coordinates
     let req = CaptureRequest {
-        global_x: cursor_x - (width as i32 / 2),
-        global_y: cursor_y - (height as i32 / 2),
+        global_x: cursor_x_physical,
+        global_y: cursor_y_physical,
         width,
         height,
     };
     
-    tracing::info!("Capture region: ({},{}) size {}x{}", req.global_x, req.global_y, width, height);
+    tracing::info!("Capture region (physical): ({},{}) size {}x{}", 
+                  req.global_x, req.global_y, width, height);
 
-    // 2. Get monitor containing cursor
-    let monitors = enumerate_monitors_with_bounds()?;
+    // 7. Get monitor containing cursor (already have it)
     let mut relevant_monitors = Vec::new();
-
-    for (m, m_left, m_top, m_right, m_bottom) in monitors {
-        // Check for intersection
-        let intersects = !(
-            req.global_x >= m_right || 
-            req.global_x + req.width as i32 <= m_left || 
-            req.global_y >= m_bottom || 
-            req.global_y + req.height as i32 <= m_top
-        );
-
-        if intersects {
-            let mw = (m_right - m_left) as u32;
-            let mh = (m_bottom - m_top) as u32;
-            relevant_monitors.push((m, m_left, m_top, mw, mh));
-        }
+    
+    // Check if capture region intersects with this monitor (in physical coordinates)
+    let intersects = !(
+        req.global_x >= monitor_physical_width ||
+        req.global_x + req.width as i32 <= 0 ||
+        req.global_y >= monitor_physical_height ||
+        req.global_y + req.height as i32 <= 0
+    );
+    
+    if intersects {
+        relevant_monitors.push((
+            monitor, 
+            0,  // Physical origin is (0, 0) for this monitor
+            0, 
+            monitor_physical_width as u32, 
+            monitor_physical_height as u32
+        ));
     }
 
-    // 3. Capture frames from monitor containing cursor
+    // 8. Capture frames from monitor containing cursor
     let (tx, rx) = mpsc::channel();
     let num_monitors = relevant_monitors.len();
 
     for (monitor, mx, my, mw, mh) in relevant_monitors {
         let tx_clone = tx.clone();
         
-        // Pass the capture REQUEST dimensions, not monitor dimensions
-        // We'll crop the captured image to the requested region
+        // Pass physical coordinates - no scaling needed in handler
         let settings = Settings::new(
             monitor,
             CursorCaptureSettings::WithCursor,
@@ -285,7 +320,7 @@ pub fn get_screen_area_around_cursor(
         });
     }
 
-    // 4. Stitch results from all monitors
+    // 9. Stitch results (now just one cropped image)
     let mut canvas = RgbaImage::new(width, height);
     for i in 0..num_monitors {
         let frame = rx.recv()?;
@@ -320,27 +355,13 @@ pub fn get_screen_area_around_cursor(
                 )
             })?;
         
-        tracing::info!("Successfully created {}x{} image with cursor from monitor at ({},{})", 
-                      frame.crop_width, frame.crop_height, frame.crop_x, frame.crop_y);
+        tracing::info!("Successfully created {}x{} image with cursor", frame.crop_width, frame.crop_height);
 
-        // Copy pixels to canvas at correct position
-        // The frame's crop region is in global virtual screen coordinates
-        // We need to place it at the correct position on the canvas
+        // Copy pixels to canvas (frame is already cropped to requested region)
         for local_y in 0..frame.crop_height {
             for local_x in 0..frame.crop_width {
-                // Calculate global virtual screen position
-                let global_x = frame.crop_x + local_x as i32;
-                let global_y = frame.crop_y + local_y as i32;
-                
-                // Convert to canvas coordinates (relative to capture request)
-                let canvas_x = (global_x - req.global_x) as u32;
-                let canvas_y = (global_y - req.global_y) as u32;
-                
-                // Only draw if within canvas bounds
-                if canvas_x < width && canvas_y < height {
-                    let pixel = monitor_img.get_pixel(local_x, local_y);
-                    canvas.put_pixel(canvas_x, canvas_y, *pixel);
-                }
+                let pixel = monitor_img.get_pixel(local_x, local_y);
+                canvas.put_pixel(local_x, local_y, *pixel);
             }
         }
     }
