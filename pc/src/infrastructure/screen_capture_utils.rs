@@ -375,7 +375,7 @@ pub fn get_screen_area_around_cursor(
             capture_top_logical >= m_bottom     // Capture is entirely below
         );
         
-        tracing::info!("Monitor ({},{})-({},{}) intersects={}", 
+        tracing::info!("Monitor logical=({},{})-({},{}) intersects={}", 
                       m_left, m_top, m_right, m_bottom, intersects);
         
         if intersects {
@@ -392,10 +392,37 @@ pub fn get_screen_area_around_cursor(
                           monitor_physical_width, monitor_physical_height,
                           scale_x, scale_y);
             
+            // Calculate overlap between capture region and this monitor (in logical coords)
+            let overlap_left = capture_left_logical.max(m_left);
+            let overlap_top = capture_top_logical.max(m_top);
+            let overlap_right = capture_right_logical.min(m_right);
+            let overlap_bottom = capture_bottom_logical.min(m_bottom);
+            
+            // Convert overlap to PHYSICAL coordinates (relative to monitor origin)
+            let physical_crop_x = ((overlap_left - m_left) as f32 * scale_x) as i32;
+            let physical_crop_y = ((overlap_top - m_top) as f32 * scale_y) as i32;
+            let physical_crop_w = ((overlap_right - overlap_left) as f32 * scale_x) as u32;
+            let physical_crop_h = ((overlap_bottom - overlap_top) as f32 * scale_y) as u32;
+            
+            // Calculate where this portion goes on the final canvas (in LOGICAL coordinates)
+            let canvas_x = (overlap_left - capture_left_logical).max(0) as u32;
+            let canvas_y = (overlap_top - capture_top_logical).max(0) as u32;
+            
+            tracing::info!("  Overlap: logical=({},{})-({},{}) physical=({},{}) {}x{} canvas=({},{})",
+                          overlap_left, overlap_top, overlap_right, overlap_bottom,
+                          physical_crop_x, physical_crop_y, physical_crop_w, physical_crop_h,
+                          canvas_x, canvas_y);
+            
             relevant_monitors.push((
                 monitor,
-                m_left, m_top, m_right, m_bottom,
-                scale_x, scale_y,
+                physical_crop_x,
+                physical_crop_y,
+                physical_crop_w,
+                physical_crop_h,
+                canvas_x,
+                canvas_y,
+                scale_x,
+                scale_y,
             ));
         }
     }
@@ -405,33 +432,14 @@ pub fn get_screen_area_around_cursor(
     let num_monitors = relevant_monitors.len();
     let mut _capture_controls = Vec::new();
 
-    for (monitor, m_left, m_top, m_right, m_bottom, scale_x, scale_y) in relevant_monitors {
+    for (monitor, physical_crop_x, physical_crop_y, physical_crop_w, physical_crop_h, 
+         canvas_x, canvas_y, _scale_x, _scale_y) in relevant_monitors {
         let tx_clone = tx.clone();
-        
-        // Calculate overlap between capture region and this monitor (in logical coords)
-        let overlap_left = capture_left_logical.max(m_left);
-        let overlap_top = capture_top_logical.max(m_top);
-        let overlap_right = capture_right_logical.min(m_right);
-        let overlap_bottom = capture_bottom_logical.min(m_bottom);
-        
-        // Convert overlap to PHYSICAL coordinates (relative to monitor origin)
-        let physical_crop_x = ((overlap_left - m_left) as f32 * scale_x) as i32;
-        let physical_crop_y = ((overlap_top - m_top) as f32 * scale_y) as i32;
-        let physical_crop_w = ((overlap_right - overlap_left) as f32 * scale_x) as u32;
-        let physical_crop_h = ((overlap_bottom - overlap_top) as f32 * scale_y) as u32;
-        
-        // Calculate where this portion goes on the final canvas (in LOGICAL coordinates)
-        let canvas_x = (overlap_left - capture_left_logical).max(0) as u32;
-        let canvas_y = (overlap_top - capture_top_logical).max(0) as u32;
-        
-        tracing::debug!("Monitor capture: overlap=({},{})-({},{}) physical=({},{}) {}x{} canvas=({},{})",
-                       overlap_left, overlap_top, overlap_right, overlap_bottom,
-                       physical_crop_x, physical_crop_y, physical_crop_w, physical_crop_h,
-                       canvas_x, canvas_y);
         
         let monitor_physical_width = monitor.width()? as u32;
         let monitor_physical_height = monitor.height()? as u32;
         
+        // Pass scale factors to handler for proper scaling during stitching
         let settings = Settings::new(
             monitor,
             CursorCaptureSettings::WithCursor,
@@ -441,7 +449,7 @@ pub fn get_screen_area_around_cursor(
             DirtyRegionSettings::Default,
             ColorFormat::Bgra8,
             (tx_clone, (
-                0, 0,
+                0, 0,  // mx, my (not used)
                 monitor_physical_width,
                 monitor_physical_height,
                 physical_crop_x,
@@ -467,7 +475,7 @@ pub fn get_screen_area_around_cursor(
     // 6. Stitch results from all monitors
     let mut canvas = RgbaImage::new(width, height);
     
-    // Fill canvas with black first
+    // Fill canvas with black first (for areas not covered by any monitor)
     for y in 0..height {
         for x in 0..width {
             canvas.put_pixel(x, y, image::Rgba([0, 0, 0, 255]));
@@ -513,7 +521,7 @@ pub fn get_screen_area_around_cursor(
         let logical_crop_h = ((frame.crop_height as f32) / cursor_scale_y).round() as u32;
         
         let monitor_img = if logical_crop_w != frame.crop_width || logical_crop_h != frame.crop_height {
-            // Scale down to logical size
+            // Scale to logical size (matching cursor's monitor scale)
             image::imageops::resize(
                 &physical_img,
                 logical_crop_w,

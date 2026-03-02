@@ -281,12 +281,11 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
                                   ],
                                 ),
                               ),
-                            // Cursor indicator (if streaming) - ALWAYS CENTERED
-                            // Server always centers cursor in capture, so red dot is always in middle
+                            // Cursor indicator (if streaming) - CENTERED in touchpad
+                            // Since server centers cursor in capture, and capture fills touchpad,
+                            // the cursor (and thus red dot) should be at touchpad center
                             if (isStreaming && screenFrame != null)
-                              Positioned(
-                                left: (screenFrame.captureWidth.toDouble() - 7) / 2,  // True center X
-                                top: (screenFrame.captureHeight.toDouble() - 7) / 2,  // True center Y
+                              Center(  // Center in the Stack (which fills touchpad)
                                 child: Container(
                                   width: 7,    // Reduced from 20 for less obstruction
                                   height: 7,
