@@ -26,13 +26,21 @@ tungstenite = "0.21"
 # mDNS discovery
 mdns-sd = "0.11"
 
-# Input simulation
+# Input simulation (for keyboard/mouse control)
 enigo = "0.6"
 
-# Screen capture (for streaming to mobile)
-xcap = "0.8"
+# Screen capture with real cursor (for streaming to mobile)
+windows-capture = "=1.5.0"
 image = "0.25"
 base64 = "0.22"
+
+# Windows API for cursor position and monitor info (using winapi for stability)
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = [
+    "winuser",
+    "windef",
+    "wingdi"
+] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
