@@ -297,14 +297,18 @@ pub fn get_screen_area_around_cursor(
     let (tx, rx) = mpsc::channel();
     let num_monitors = relevant_monitors.len();
 
+    // Store capture controls to keep them alive until frame is received
+    let mut _capture_controls = Vec::new();
+
     for (monitor, mx, my, mw, mh) in relevant_monitors {
         let tx_clone = tx.clone();
-        
+
         // Pass physical coordinates - no scaling needed in handler
+        // Note: Use Default for border settings - Windows 10 doesn't support toggling
         let settings = Settings::new(
             monitor,
             CursorCaptureSettings::WithCursor,
-            DrawBorderSettings::WithoutBorder,
+            DrawBorderSettings::Default,  // Windows 10 doesn't support WithBorder/WithoutBorder
             SecondaryWindowSettings::Default,
             MinimumUpdateIntervalSettings::Default,
             DirtyRegionSettings::Default,
@@ -312,9 +316,17 @@ pub fn get_screen_area_around_cursor(
             (tx_clone, (mx, my, mw, mh, req.global_x, req.global_y, req.width, req.height)),
         );
 
-        std::thread::spawn(move || {
-            let _ = SingleFrameHandler::start(settings);
-        });
+        // Use start_free_threaded() which properly handles COM initialization
+        // Returns a CaptureControl that must be kept alive during capture
+        match SingleFrameHandler::start_free_threaded(settings) {
+            Ok(capture_control) => {
+                _capture_controls.push(capture_control);
+            }
+            Err(e) => {
+                tracing::error!("Failed to start screen capture: {}", e);
+                return Err(Box::new(e));
+            }
+        }
     }
 
     // 9. Stitch results (now just one cropped image)
