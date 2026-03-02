@@ -21,9 +21,12 @@ const DEFAULT_CAPTURE_SIZE: u32 = 200;
 #[allow(dead_code)]
 const MIN_CAPTURE_SIZE: u32 = 100;
 
-/// Maximum capture size
+/// Maximum capture size (can be overridden via config)
 #[allow(dead_code)]
-const MAX_CAPTURE_SIZE: u32 = 400;
+const MAX_CAPTURE_SIZE: u32 = 800;
+
+/// Default max dimension for downscaling (can be overridden via control message)
+const DEFAULT_MAX_DIMENSION: u32 = 800;
 
 /// JPEG quality (0-100)
 #[allow(dead_code)]
@@ -44,7 +47,7 @@ impl ScreenCaptureService {
         Ok(ScreenCaptureService {
             capture_width: Arc::new(Mutex::new(200)),
             capture_height: Arc::new(Mutex::new(200)),
-            max_dimension: Arc::new(Mutex::new(400)),
+            max_dimension: Arc::new(Mutex::new(DEFAULT_MAX_DIMENSION)),
         })
     }
 

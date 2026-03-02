@@ -4,7 +4,6 @@
 //! Uses windows-capture for actual screen capture with cursor
 
 use std::sync::mpsc;
-use std::thread;
 use image::RgbaImage;
 use windows_capture::{
     capture::{Context, GraphicsCaptureApiHandler},
@@ -36,11 +35,17 @@ struct CaptureRequest {
 
 struct FrameData {
     pixels: Vec<u8>,
+    #[allow(dead_code)]  // Used for debugging
     monitor_x: i32,
+    #[allow(dead_code)]  // Used for debugging
     monitor_y: i32,
+    #[allow(dead_code)]  // Used for debugging
     monitor_width: u32,
+    #[allow(dead_code)]  // Used for debugging
     monitor_height: u32,
+    #[allow(dead_code)]  // Used for debugging
     crop_x: i32,
+    #[allow(dead_code)]  // Used for debugging
     crop_y: i32,
     crop_width: u32,
     crop_height: u32,
@@ -183,14 +188,6 @@ fn get_monitor_at_cursor() -> Result<(Monitor, i32, i32, i32, i32), Box<dyn std:
     }
 }
 
-/// Enumerate all monitors with their bounds
-fn enumerate_monitors_with_bounds() -> Result<Vec<(Monitor, i32, i32, i32, i32)>, Box<dyn std::error::Error>> {
-    // For now, just return the monitor at cursor position
-    // TODO: Properly enumerate all monitors if needed for multi-monitor stitching
-    let (monitor, left, top, right, bottom) = get_monitor_at_cursor()?;
-    Ok(vec![(monitor, left, top, right, bottom)])
-}
-
 /// Crop an image from full monitor capture
 fn crop_image(
     pixels: &[u8],
@@ -264,10 +261,10 @@ pub fn get_screen_area_around_cursor(
     tracing::info!("Cursor position (physical, relative to monitor): ({}, {})", 
                   cursor_x_physical, cursor_y_physical);
     
-    // 6. Calculate capture region in PHYSICAL coordinates
+    // 6. Calculate capture region CENTERED on cursor (in PHYSICAL coordinates)
     let req = CaptureRequest {
-        global_x: cursor_x_physical,
-        global_y: cursor_y_physical,
+        global_x: cursor_x_physical - (width as i32 / 2),  // Center on cursor!
+        global_y: cursor_y_physical - (height as i32 / 2),  // Center on cursor!
         width,
         height,
     };
