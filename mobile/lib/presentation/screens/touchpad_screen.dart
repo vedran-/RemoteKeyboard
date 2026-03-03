@@ -337,19 +337,19 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
                         onTap: _handleTap,
                         onSecondaryTap: _handleSecondaryTap,
                         child: Container(
-                        margin: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isDisconnected
-                              ? Theme.of(context).colorScheme.surfaceContainerHighest
-                              : Theme.of(context).colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
+                          margin: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
                             color: isDisconnected
-                                ? Theme.of(context).colorScheme.outlineVariant
-                                : Theme.of(context).colorScheme.primary,
-                            width: 2,
+                                ? Theme.of(context).colorScheme.surfaceContainerHighest
+                                : Theme.of(context).colorScheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isDisconnected
+                                  ? Theme.of(context).colorScheme.outlineVariant
+                                  : Theme.of(context).colorScheme.primary,
+                              width: 2,
+                            ),
                           ),
-                        ),
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
