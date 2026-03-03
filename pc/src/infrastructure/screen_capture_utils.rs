@@ -424,8 +424,8 @@ pub fn get_screen_area_around_cursor(
             // Canvas position: where does this monitor's portion go on final image?
             // We need to convert from global physical to canvas coordinates
             // Canvas is in "cursor scale" logical coordinates
-            let canvas_x = ((overlap_left - capture_left_phys) as f32 / cursor_scale_x).round().max(0.0) as u32;
-            let canvas_y = ((overlap_top - capture_top_phys) as f32 / cursor_scale_y).round().max(0.0) as u32;
+            let canvas_x = ((overlap_left - capture_left_phys) as f32).round().max(0.0) as u32;
+            let canvas_y = ((overlap_top - capture_top_phys) as f32).round().max(0.0) as u32;
             
             tracing::info!("  Overlap: physical=({},{})-({},{}) crop=({},{}) {}x{} canvas=({},{})",
                           overlap_left, overlap_top, overlap_right, overlap_bottom,
@@ -537,8 +537,8 @@ pub fn get_screen_area_around_cursor(
         
         // Scale physical image to logical size for proper canvas positioning
         // This ensures cursor is centered regardless of monitor DPI
-        let logical_crop_w = ((frame.crop_width as f32) / cursor_scale_x).round() as u32;
-        let logical_crop_h = ((frame.crop_height as f32) / cursor_scale_y).round() as u32;
+        let logical_crop_w = ((frame.crop_width as f32)).round() as u32;
+        let logical_crop_h = ((frame.crop_height as f32)).round() as u32;
         
         let monitor_img = if logical_crop_w != frame.crop_width || logical_crop_h != frame.crop_height {
             // Scale to logical size (matching cursor's monitor scale)

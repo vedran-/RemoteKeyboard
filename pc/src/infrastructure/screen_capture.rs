@@ -58,8 +58,6 @@ impl ScreenCaptureService {
         let image = get_screen_area_around_cursor(capture_width, capture_height)
             .map_err(|e| Error::input(format!("Failed to capture screen: {}", e)))?;
         
-        info!("Screen captured: {}x{} with cursor", image.width(), image.height());
-
         // Convert RGBA to RGB (JPEG doesn't support alpha)
         let rgb_image = image::DynamicImage::ImageRgba8(image).into_rgb8();
 
