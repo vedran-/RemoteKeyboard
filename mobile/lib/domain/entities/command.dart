@@ -176,27 +176,25 @@ class ScreenFrame {
   }
 }
 
-/// Screen control messages (mobile → PC)
-class ScreenControl {
-  final bool enabled;
-  final int? captureWidth;   // Client-requested capture width
-  final int? captureHeight;  // Client-requested capture height
-  final int? maxDimension;   // Max dimension for server downscaling
+/// Screen frame request from client to server (mobile → PC)
+/// Client sends viewport dimensions and zoom level, server calculates capture size
+class ScreenFrameRequest {
+  final int viewportWidth;       // Client's display area width
+  final int viewportHeight;      // Client's display area height
+  final double zoomLevel;        // Zoom level: 0.1 (zoomed out) to 5.0 (zoomed in)
 
-  ScreenControl({
-    required this.enabled,
-    this.captureWidth,
-    this.captureHeight,
-    this.maxDimension,
+  ScreenFrameRequest({
+    required this.viewportWidth,
+    required this.viewportHeight,
+    required this.zoomLevel,
   });
 
-  /// Convert to JSON
+  /// Convert to JSON for WebSocket transmission
   Map<String, dynamic> toJson() {
     return {
-      'enabled': enabled,
-      if (captureWidth != null) 'capture_width': captureWidth,
-      if (captureHeight != null) 'capture_height': captureHeight,
-      if (maxDimension != null) 'max_dimension': maxDimension,
+      'viewport_width': viewportWidth,
+      'viewport_height': viewportHeight,
+      'zoom_level': zoomLevel,
     };
   }
 }

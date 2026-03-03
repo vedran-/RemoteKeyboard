@@ -66,30 +66,30 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
   /// Handle pinch zoom gesture (and pan for mouse control)
   void _handleScaleUpdate(ScaleUpdateDetails details) {
     if (!widget.screenStreamService.isStreaming) return;
-    
+
     // Multi-touch (pointerCount > 1) = pinch zoom
     if (details.pointerCount > 1) {
       // Calculate new zoom level based on pinch gesture
-      final newZoom = (_initialZoom * details.scale).clamp(0.5, 3.0);
-      
+      final newZoom = (_initialZoom * details.scale).clamp(0.1, 5.0);
+
       setState(() {
         _currentZoom = newZoom;
       });
-      
+
       // Update service with new zoom level (don't notify server continuously during gesture)
       widget.screenStreamService.setZoomLevel(newZoom, notifyServer: false);
-    } 
+    }
     // Single touch (pointerCount == 1) = pan for mouse control
     else {
       // Calculate drag delta from focal point movement
       final delta = details.focalPoint - _lastFocalPoint;
       _lastFocalPoint = details.focalPoint;
-      
+
       if (!widget.connectionService.isConnected) return;
-      
+
       final dx = (delta.dx * _sensitivity).round();
       final dy = (delta.dy * _sensitivity).round();
-      
+
       widget.commandService.sendMouseMove(dx, dy);
     }
   }
@@ -99,15 +99,15 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
     // Only handle zoom if pointer count > 1 (multi-touch pinch)
     if (details.pointerCount > 1 && widget.screenStreamService.isStreaming) {
       // Round zoom to nearest 0.25 increment for cleaner values
-      final roundedZoom = ((_currentZoom * 4).round() / 4).clamp(0.5, 3.0);
-      
+      final roundedZoom = ((_currentZoom * 4).round() / 4).clamp(0.1, 5.0);
+
       setState(() {
         _currentZoom = roundedZoom;
       });
-      
+
       // Send final zoom level to server
       widget.screenStreamService.setZoomLevel(roundedZoom, notifyServer: true);
-      
+
       widget.notificationService.info(
         context,
         'Zoom: ${(roundedZoom * 100).toInt()}%',
@@ -159,37 +159,18 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
         height = screenHeight * 0.35;
       }
 
-      // Clamp to max/min dimensions while maintaining aspect ratio
-      const maxDimension = 800.0;
-      const minDimension = 200.0;
+      final viewportWidth = width.round();
+      final viewportHeight = height.round();
 
-      if (width > maxDimension || height > maxDimension) {
-        // Scale down proportionally
-        final scale = maxDimension / max(width, height);
-        width *= scale;
-        height *= scale;
-      }
-
-      if (width < minDimension || height < minDimension) {
-        // Scale up proportionally (if too small)
-        final scale = minDimension / min(width, height);
-        width *= scale;
-        height *= scale;
-      }
-
-      final captureWidth = width.round();
-      final captureHeight = height.round();
-
-      print('[Touchpad] Container: ${_touchpadWidth?.toStringAsFixed(0) ?? '?'}x${_touchpadHeight?.toStringAsFixed(0) ?? '?'} (aspect: ${_touchpadWidth != null && _touchpadHeight != null ? (_touchpadWidth! / _touchpadHeight!).toStringAsFixed(2) : '?'}:1)');
-      print('[Touchpad] Requested: ${captureWidth}x$captureHeight (aspect: ${(captureWidth / captureHeight).toStringAsFixed(2)}:1)');
+      print('[Touchpad] Container: ${_touchpadWidth?.toStringAsFixed(0) ?? '?'}x${_touchpadHeight?.toStringAsFixed(0) ?? '?'}');
+      print('[Touchpad] Viewport: ${viewportWidth}x$viewportHeight (aspect: ${(viewportWidth / viewportHeight).toStringAsFixed(2)}:1)');
 
       widget.screenStreamService.startStreaming(
-        captureWidth: captureWidth,
-        captureHeight: captureHeight,
-        maxDimension: 400,  // Server will downscale if larger
+        viewportWidth: viewportWidth,
+        viewportHeight: viewportHeight,
         zoomLevel: _currentZoom,
       );
-      widget.notificationService.info(context, 'Screen streaming started (${captureWidth}x$captureHeight)');
+      widget.notificationService.info(context, 'Screen streaming started (${viewportWidth}x$viewportHeight)');
     }
   }
 

@@ -1,4 +1,4 @@
-# ADR: Pinch Zoom for Screen Streaming
+# ADR: Server-Side Zoom with Viewport-Based Capture
 
 **Date:** 2026-03-03  
 **Status:** Implemented  
@@ -8,17 +8,21 @@
 
 ## Context
 
-The RemoteKeyboard application streams screen captures from the PC to the mobile client. Users may want to zoom in or out to see more detail or a wider area of their PC screen.
+The RemoteKeyboard application streams screen captures from the PC to the mobile client. The initial implementation had the client sending capture dimensions directly, which was inefficient:
+
+- Client requested large capture (e.g., 1600x1200 for zoomed out view)
+- Server captured and sent full-size image
+- Client scaled down to fit viewport
+- **Wasted bandwidth** sending pixels that get discarded
 
 ### Requirements
 
-1. Users should be able to pinch-to-zoom on the mobile touchpad screen
-2. Zoom should affect the screenshot size requested from the server
-3. Higher zoom = smaller capture area (zoomed in, more detail)
-4. Lower zoom = larger capture area (zoomed out, wider view)
-5. Zoom level should be visible to the user
-6. Zoom should be resettable to 100%
-7. Mouse wheel should also control zoom (for Windows client)
+1. Client sends viewport dimensions (touchpad display area)
+2. Client sends zoom level (0.1x to 5.0x)
+3. Server calculates capture size: `capture = viewport × zoom`
+4. Server scales captured image to viewport size before sending
+5. Always send viewport-sized images (efficient bandwidth)
+6. Support zoom in (>1.0x) and zoom out (<1.0x)
 
 ---
 
@@ -26,189 +30,136 @@ The RemoteKeyboard application streams screen captures from the PC to the mobile
 
 ### Architecture
 
-Zoom is implemented **entirely on the client side** by adjusting the capture dimensions sent to the server:
-
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     Mobile Client                           │
 │                                                             │
-│  User input (pinch/wheel) → Zoom Level (0.5x - 3.0x)       │
+│  Touchpad Viewport: 800×600                                 │
+│  Zoom Level: 2.0x                                           │
 │                      ↓                                      │
-│  Calculate: capture_size = base_size / zoom_level          │
-│                      ↓                                      │
-│  Send to Server: { capture_width, capture_height }          │
+│  Send: { viewport_width, viewport_height, zoom_level }      │
 └─────────────────────────────────────────────────────────────┘
                           ↓ WebSocket
 ┌─────────────────────────────────────────────────────────────┐
 │                      PC Server                              │
 │                                                             │
-│  Receives: capture_width, capture_height                    │
-│  Captures screen area of requested size                     │
-│  Streams back to mobile                                     │
+│  Calculate: capture = 800×600 × 2.0 = 1600×1200            │
+│  Capture 1600×1200 area around cursor                       │
+│  Scale DOWN to 800×600 (viewport size)                      │
+│  Send 800×600 image                                         │
 └─────────────────────────────────────────────────────────────┘
+```
+
+### Protocol Message
+
+**Client → Server:**
+```json
+{
+  "type": "screen_frame_request",
+  "viewport_width": 800,
+  "viewport_height": 600,
+  "zoom_level": 2.0
+}
+```
+
+**Server → Client:**
+```json
+{
+  "type": "screen_frame",
+  "cursor_x": 400,
+  "cursor_y": 300,
+  "monitor_id": 0,
+  "capture_width": 800,
+  "capture_height": 600,
+  "data": "<base64 JPEG>"
+}
 ```
 
 ### Zoom Formula
 
 ```
-actual_capture_width  = base_width  / zoom_level
-actual_capture_height = base_height / zoom_level
+capture_width  = viewport_width  × zoom_level
+capture_height = viewport_height × zoom_level
+
+Server always scales capture to viewport size before sending.
 ```
 
 **Examples:**
-- At 1.0x zoom with 400x300 base: requests 400x300 capture
-- At 2.0x zoom with 400x300 base: requests 200x150 capture (zoomed in)
-- At 0.5x zoom with 400x300 base: requests 800x600 capture (zoomed out)
+
+| Viewport | Zoom | Capture | Sent | Effect |
+|----------|------|---------|------|--------|
+| 800×600 | 1.0x | 800×600 | 800×600 | Native (1:1) |
+| 800×600 | 2.0x | 1600×1200 | 800×600 | Zoomed in (more detail) |
+| 800×600 | 0.5x | 400×300 | 800×600 | Zoomed out (wider view) |
+| 800×600 | 4.0x | 3200×2400 | 800×600 | Maximum zoom |
+| 800×600 | 0.1x | 80×60 | 800×600 | Maximum zoom out |
 
 ### Zoom Range
 
-- **Minimum:** 0.5x (50%) - shows 2x more area
-- **Maximum:** 3.0x (300%) - shows 1/3 the area, more detail
-- **Default:** 1.0x (100%) - normal view
+- **Minimum:** 0.1x (10%) - maximum zoom out, wide view
+- **Maximum:** 5.0x (500%) - maximum zoom in, fine detail
+- **Default:** 1.0x (100%) - native viewport size
 
-### Input Methods
+### Server Implementation
 
-#### 1. Pinch Gesture (Mobile/Touch)
-
-- **Pinch out** (spread two fingers) → Zoom in
-- **Pinch in** (bring two fingers together) → Zoom out
-- Gesture uses `ScaleUpdateDetails.scale` for continuous zoom
-
-#### 2. Mouse Wheel (Windows/Desktop)
-
-- **Scroll up** (negative delta) → Zoom in (0.1x step)
-- **Scroll down** (positive delta) → Zoom out (0.1x step)
-- Uses `Listener.onPointerSignal` with `PointerScrollEvent`
-
-### Protocol
-
-**No protocol changes required.** The existing `ScreenControl` message already supports `capture_width` and `capture_height` fields:
-
-```json
-{
-  "type": "custom",
-  "payload": {
-    "enabled": true,
-    "capture_width": 200,
-    "capture_height": 150,
-    "max_dimension": 400
-  }
+```rust
+pub struct ScreenFrameRequest {
+    pub viewport_width: u32,
+    pub viewport_height: u32,
+    pub zoom_level: f32,
 }
-```
 
-The zoom level is **internal to the client** and not transmitted to the server.
-
-### UI Components
-
-1. **Pinch Gesture Detector** - Captures pinch gestures on the touchpad area
-2. **Mouse Wheel Listener** - Captures scroll wheel events for zoom
-3. **Zoom Indicator** - Shows current zoom percentage in app bar (tap to reset)
-4. **Visual Feedback** - Toast notification shows zoom level on change
-
-### Implementation Details
-
-#### ScreenStreamService
-
-```dart
-// Internal state
-int _baseCaptureWidth = 400;    // Base dimensions at 1.0x
-int _baseCaptureHeight = 300;
-double _zoomLevel = 1.0;
-
-// Calculated dimensions (sent to server)
-int get captureWidth => (_baseCaptureWidth / _zoomLevel).round().clamp(100, 1920);
-int get captureHeight => (_baseCaptureHeight / _zoomLevel).round().clamp(100, 1080);
-
-// Zoom control methods
-void setZoomLevel(double zoom, {bool notifyServer = true})
-void resetZoom()
-void zoomIn({double step = 0.25})  // Pinch uses 0.25, wheel uses 0.1
-void zoomOut({double step = 0.25})
-```
-
-#### TouchpadScreen - Mouse Wheel
-
-```dart
-Listener(
-  onPointerSignal: (event) {
-    if (!isStreaming) return;
-    
-    if (event is PointerScrollEvent) {
-      final scrollDelta = event.scrollDelta.dy;
-      
-      // Scroll up (negative) = zoom in
-      if (scrollDelta < 0) {
-        widget.screenStreamService.zoomIn(step: 0.1);
-      } 
-      // Scroll down (positive) = zoom out
-      else if (scrollDelta > 0) {
-        widget.screenStreamService.zoomOut(step: 0.1);
-      }
-      
-      // Show zoom feedback
-      final newZoom = widget.screenStreamService.zoomLevel;
-      widget.notificationService.info(
-        context, 
-        'Zoom: ${(newZoom * 100).toInt()}%',
-      );
+impl ScreenFrameRequest {
+    pub fn capture_dimensions(&self) -> (u32, u32) {
+        let w = (self.viewport_width as f32 * self.zoom_level) as u32;
+        let h = (self.viewport_height as f32 * self.zoom_level) as u32;
+        (w, h)
     }
-  },
-  child: GestureDetector(...),
-)
-```
-
-#### TouchpadScreen - Unified Gesture Handling
-
-**Note:** We use only `ScaleGestureRecognizer` (via `onScaleStart/Update/End`) because it's a superset of pan gestures. Having both would be redundant and cause conflicts.
-
-```dart
-// Store last focal point for pan delta calculation
-Offset _lastFocalPoint = Offset.zero;
-
-void _handleScaleStart(ScaleStartDetails details) {
-  _initialZoom = _currentZoom;
-  _lastFocalPoint = details.focalPoint;
 }
 
-void _handleScaleUpdate(ScaleUpdateDetails details) {
-  if (!isStreaming) return;
+// In capture service:
+let (capture_w, capture_h) = request.capture_dimensions();
+let image = capture_region(capture_w, capture_h);
+
+// Scale to viewport size
+if zoom_level != 1.0 {
+    scale_image(image, viewport_width, viewport_height)
+} else {
+    image
+}
+```
+
+### Client Implementation
+
+```dart
+class ScreenFrameRequest {
+  final int viewportWidth;
+  final int viewportHeight;
+  final double zoomLevel;
   
-  // Multi-touch (pointerCount > 1) = pinch zoom
-  if (details.pointerCount > 1) {
-    final newZoom = (_initialZoom * details.scale).clamp(0.5, 3.0);
-    widget.screenStreamService.setZoomLevel(newZoom, notifyServer: false);
-  } 
-  // Single touch (pointerCount == 1) = pan for mouse control
-  else {
-    final delta = details.focalPoint - _lastFocalPoint;
-    _lastFocalPoint = details.focalPoint;
-    
-    final dx = (delta.dx * sensitivity).round();
-    final dy = (delta.dy * sensitivity).round();
-    
-    widget.commandService.sendMouseMove(dx, dy);
-  }
+  Map<String, dynamic> toJson() => {
+    'viewport_width': viewportWidth,
+    'viewport_height': viewportHeight,
+    'zoom_level': zoomLevel,
+  };
 }
 
-void _handleScaleEnd(ScaleEndDetails details) {
-  // Only handle zoom end for multi-touch
-  if (details.pointerCount > 1 && isStreaming) {
-    final roundedZoom = ((_currentZoom * 4).round() / 4).clamp(0.5, 3.0);
-    widget.screenStreamService.setZoomLevel(roundedZoom, notifyServer: true);
-  }
+// In service:
+void startStreaming({
+  required int viewportWidth,
+  required int viewportHeight,
+  double zoomLevel = 1.0,
+}) {
+  _viewportWidth = viewportWidth;
+  _viewportHeight = viewportHeight;
+  _zoomLevel = zoomLevel.clamp(0.1, 5.0);
+  _sendFrameRequest();
 }
-```
 
-```dart
-// In build method - use only Scale gestures, not both pan and scale
-GestureDetector(
-  onScaleStart: _handleScaleStart,
-  onScaleUpdate: _handleScaleUpdate,
-  onScaleEnd: _handleScaleEnd,
-  onTap: _handleTap,
-  onSecondaryTap: _handleSecondaryTap,
-  child: touchpadContainer,
-)
+void setZoomLevel(double zoom) {
+  _zoomLevel = zoom.clamp(0.1, 5.0);
+  _sendFrameRequest();  // Notify server
+}
 ```
 
 ---
@@ -217,64 +168,56 @@ GestureDetector(
 
 ### Positive
 
-1. **No server changes required** - Uses existing protocol
-2. **Smooth user experience** - Pinch gesture is intuitive
-3. **Visual feedback** - Users see current zoom level
-4. **Flexible** - Works with any screen size
-5. **Testable** - Zoom logic is isolated and testable
+1. **Efficient bandwidth** - Always send viewport-sized images
+2. **Server does the work** - Server has more CPU/GPU resources
+3. **Clean separation** - Client declares intent, server handles implementation
+4. **Flexible zoom** - 0.1x to 5.0x range works naturally
+5. **Perfect aspect ratio** - Client viewport aspect ratio always preserved
+6. **Cursor always centered** - Scaling preserves relative position
 
 ### Negative
 
-1. **Server round-trip** - Zoom changes require server communication
-2. **Latency** - Zoom changes may have slight delay depending on network
-3. **Bandwidth** - Higher zoom (smaller captures) uses less bandwidth, lower zoom uses more
+1. **Server CPU usage** - Server must scale images (minimal with modern CPUs)
+2. **Round-trip latency** - Zoom changes require server communication
+3. **No client-side zoom buffering** - Must wait for server response
 
 ### Risks
 
-1. **Extreme zoom values** - Mitigated by clamping to 0.5x - 3.0x range
-2. **Capture size limits** - Mitigated by clamping to 100-1920px width, 100-1080px height
-3. **Aspect ratio changes** - Zoom preserves aspect ratio of base dimensions
+1. **Extreme zoom out (<1.0x)** - Upscaling may look blurry
+   - Mitigation: Document that <1.0x is for wide view, not detail
+2. **Extreme zoom in (>4.0x)** - May capture beyond screen bounds
+   - Mitigation: Server handles edge cases with padding/clamping
+3. **Aspect ratio mismatch** - Client viewport differs from capture
+   - Mitigation: Server scales to exact viewport size, no distortion
 
 ---
 
 ## Testing
 
-### Unit Tests (11 tests passing)
+### Server Tests
+- Capture calculation: `capture = viewport × zoom`
+- Scaling logic: downscale (>1x), upscale (<1x), no scale (=1x)
+- Aspect ratio preservation
+- Cursor centering after scale
 
+### Client Tests (11 passing)
 - Default zoom level is 1.0
 - Start streaming with custom zoom level
-- Zoom in reduces capture dimensions
-- Zoom out increases capture dimensions
-- setZoomLevel with notifyServer=false
-- resetZoom returns to 1.0 and restores base dimensions
-- Zoom level clamping (0.5 to 3.0)
-- Capture dimensions clamping (100px minimum)
-- Zoom control message format
-- setCaptureDimensions updates base dimensions
-- setCaptureDimensions with zoom applies scaling
-
-### Manual Testing
-
-1. Start screen streaming
-2. Pinch out to zoom in - verify image shows smaller area with more detail
-3. Pinch in to zoom out - verify image shows larger area
-4. Tap zoom indicator - verify reset to 100%
-5. Verify zoom percentage display updates correctly
-
----
-
-## Future Enhancements
-
-1. **Zoom presets** - Quick buttons for 50%, 100%, 200%
-2. **Zoom animation** - Smooth transitions between zoom levels
-3. **Zoom memory** - Remember last zoom level per PC
-4. **Double-tap zoom** - Double-tap to toggle between 100% and 200%
-5. **Keyboard shortcuts** - Ctrl+/- to zoom on Windows client
+- Zoom in/out increases/decreases zoom
+- Zoom clamping (0.1x - 5.0x)
+- Reset zoom functionality
+- Message format verification
+- Viewport dimension updates
 
 ---
 
 ## Related Documents
 
-- [PROTOCOL.md](PROTOCOL.md) - Screen control messages
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Service layer design
-- [SPECIFICATION.md](SPECIFICATION.md) - Screen streaming requirements
+- [PROTOCOL.md](PROTOCOL.md) - Screen streaming protocol
+- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture
+- [PROGRESS.md](PROGRESS.md) - Implementation progress
+
+---
+
+*Last Updated: 2026-03-03*
+*Version: 2.0*

@@ -51,23 +51,7 @@ Example: ws://192.168.1.100:8765/remote
 
 ### 3.2 Message Format
 
-All messages are JSON-encoded with the following structure:
-
-```json
-{
-  "type": "<message_type>",
-  "payload": { ... },
-  "timestamp": <unix_epoch_ms>,
-  "id": "<optional-message-id>"
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `type` | string | Yes | Message type identifier |
-| `payload` | object | Yes | Message-specific data (can be `{}`) |
-| `timestamp` | number | Yes | Unix epoch milliseconds (for ordering, latency calc) |
-| `id` | string | No | Unique message ID for ack/nack correlation |
+All messages are JSON-encoded.
 
 ### 3.3 Connection Lifecycle
 
@@ -92,116 +76,18 @@ All messages are JSON-encoded with the following structure:
      │                                        │
 ```
 
-### 3.4 Error Responses
-
-```json
-{
-  "type": "error",
-  "payload": {
-    "code": "error_code",
-    "message": "Human readable message",
-    "original_message_id": "id-of-failed-msg"
-  },
-  "timestamp": 1709012345678
-}
-```
-
-**Error Codes:**
-| Code | Description |
-|------|-------------|
-| `invalid_message` | JSON parse error or unknown type |
-| `invalid_payload` | Payload schema validation failed |
-| `not_connected` | Operation requires active connection |
-| `input_failed` | Failed to simulate input on PC |
-| `server_error` | Internal server error |
-
 ---
 
-## 4. Message Types
+## 4. Command Messages (Mobile → PC)
 
-### 4.1 Control Messages (Bidirectional)
-
-#### 4.1.1 Connection Accepted (PC → Mobile)
-
-Sent when PC accepts a new connection.
+### 4.1 Message Structure
 
 ```json
 {
-  "type": "connection_accepted",
-  "payload": {
-    "session_id": "550e8400-e29b-41d4-a716-446655440000"
-  },
-  "timestamp": 1709012345678
+  "type": "<command_type>",
+  "payload": { ... }
 }
 ```
-
-#### 4.1.2 Connection Rejected (PC → Mobile)
-
-Sent when PC rejects a connection (already connected, etc.).
-
-```json
-{
-  "type": "connection_rejected",
-  "payload": {
-    "reason": "Another client is already connected"
-  },
-  "timestamp": 1709012345678
-}
-```
-
-#### 4.1.3 Heartbeat (PC → Mobile)
-
-Sent periodically by PC to verify connection.
-
-```json
-{
-  "type": "heartbeat",
-  "payload": {
-    "server_time": 1709012345678
-  },
-  "timestamp": 1709012345678
-}
-```
-
-#### 4.1.4 Heartbeat Acknowledgment (Mobile → PC)
-
-```json
-{
-  "type": "heartbeat_ack",
-  "payload": {
-    "server_time": 1709012345678,
-    "client_time": 1709012345680
-  },
-  "timestamp": 1709012345680
-}
-```
-
-#### 4.1.5 Ping/Pong (Bidirectional)
-
-For latency measurement.
-
-```json
-{
-  "type": "ping",
-  "payload": {
-    "sent_at": 1709012345678
-  },
-  "timestamp": 1709012345678
-}
-```
-
-```json
-{
-  "type": "pong",
-  "payload": {
-    "sent_at": 1709012345678,
-    "received_at": 1709012345680
-  },
-  "timestamp": 1709012345680
-}
-```
-
----
 
 ### 4.2 Mouse Commands (Mobile → PC)
 
@@ -209,12 +95,14 @@ For latency measurement.
 
 ```json
 {
-  "type": "mouse_move",
+  "type": "mouse",
   "payload": {
-    "dx": 10,
-    "dy": -5
-  },
-  "timestamp": 1709012345678
+    "action": "move",
+    "data": {
+      "dx": 10,
+      "dy": -5
+    }
+  }
 }
 ```
 
@@ -223,65 +111,45 @@ For latency measurement.
 | `dx` | integer | Horizontal delta (pixels) |
 | `dy` | integer | Vertical delta (pixels) |
 
-#### 4.2.2 Mouse Move Absolute
+#### 4.2.2 Mouse Click
 
 ```json
 {
-  "type": "mouse_move_absolute",
+  "type": "mouse",
   "payload": {
-    "x": 1920,
-    "y": 1080
-  },
-  "timestamp": 1709012345678
+    "action": "click",
+    "data": {
+      "button": "left",
+      "state": "press"
+    }
+  }
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `x` | integer | X coordinate (0 = left) |
-| `y` | integer | Y coordinate (0 = top) |
+| `button` | string | Mouse button: "left", "right", "middle" |
+| `state` | string | Button state: "press", "release" |
 
-#### 4.2.3 Mouse Click
-
-```json
-{
-  "type": "mouse_click",
-  "payload": {
-    "button": "left",
-    "action": "press"
-  },
-  "timestamp": 1709012345678
-}
-```
-
-| Field | Type | Values | Description |
-|-------|------|--------|-------------|
-| `button` | string | `left`, `right`, `middle` | Mouse button |
-| `action` | string | `press`, `release` | Button state |
-
-**Note:** A full click is `press` followed by `release`.
-
-#### 4.2.4 Mouse Scroll
+#### 4.2.3 Mouse Scroll
 
 ```json
 {
-  "type": "mouse_scroll",
+  "type": "mouse",
   "payload": {
-    "dx": 0,
-    "dy": -120
-  },
-  "timestamp": 1709012345678
+    "action": "scroll",
+    "data": {
+      "dx": 0,
+      "dy": 120
+    }
+  }
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `dx` | integer | Horizontal scroll (positive = right) |
-| `dy` | integer | Vertical scroll (positive = down) |
-
-**Note:** Windows uses 120 per scroll "tick".
-
----
+| `dx` | integer | Horizontal scroll amount |
+| `dy` | integer | Vertical scroll amount (positive = down) |
 
 ### 4.3 Keyboard Commands (Mobile → PC)
 
@@ -289,183 +157,128 @@ For latency measurement.
 
 ```json
 {
-  "type": "key_press",
+  "type": "keyboard",
   "payload": {
-    "key": "A"
-  },
-  "timestamp": 1709012345678
+    "action": "key_press",
+    "data": {
+      "key": "A"
+    }
+  }
 }
 ```
 
-#### 4.3.2 Key Release
+#### 4.3.2 Type Text
 
 ```json
 {
-  "type": "key_release",
+  "type": "keyboard",
   "payload": {
-    "key": "A"
-  },
-  "timestamp": 1709012345678
+    "action": "type_text",
+    "data": {
+      "text": "Hello World"
+    }
+  }
 }
 ```
-
-#### 4.3.3 Type Text
-
-Optimized for typing - sends whole string at once.
-
-```json
-{
-  "type": "type_text",
-  "payload": {
-    "text": "Hello, World!"
-  },
-  "timestamp": 1709012345678
-}
-```
-
-#### 4.3.4 Key Codes
-
-**Supported Keys:**
-
-| Category | Keys |
-|----------|------|
-| Letters | `A`-`Z` |
-| Numbers | `0`-`9` |
-| Function | `F1`-`F12` |
-| Control | `Control`, `Alt`, `Shift`, `Meta` (Windows/Command) |
-| Navigation | `Enter`, `Backspace`, `Tab`, `Escape`, `Space` |
-| Arrows | `ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight` |
-| Special | `Delete`, `Insert`, `Home`, `End`, `PageUp`, `PageDown` |
-| Symbols | `Plus`, `Minus`, `Equal`, `BracketLeft`, `BracketRight`, `Semicolon`, `Quote`, `Backquote`, `Backslash`, `Comma`, `Period`, `Slash`, `Slash` |
-
----
 
 ### 4.4 Media Commands (Mobile → PC)
 
-#### 4.4.1 Media Key
-
 ```json
 {
-  "type": "media_key",
-  "payload": {
-    "action": "play_pause"
-  },
-  "timestamp": 1709012345678
+  "type": "media",
+  "payload": "play_pause"
 }
 ```
 
-**Supported Actions:**
-
-| Action | Description |
-|--------|-------------|
-| `play_pause` | Toggle play/pause |
-| `next` | Next track |
-| `prev` | Previous track |
-| `vol_up` | Volume up |
-| `vol_down` | Volume down |
-| `mute` | Mute/unmute |
+**Valid media actions:**
+- `play_pause` - Toggle play/pause
+- `next` - Next track
+- `prev` - Previous track
+- `vol_up` - Increase volume
+- `vol_down` - Decrease volume
+- `mute` - Toggle mute
 
 ---
 
-### 4.5 Custom Commands (Mobile → PC)
+## 5. Screen Streaming Protocol
 
-#### 4.5.1 Custom Action
+### 5.1 Screen Frame Request (Mobile → PC)
 
-Extensible command for user-defined actions.
+Client requests screen streaming by sending viewport dimensions and zoom level.
+Server calculates capture size as `viewport_size × zoom_level` and scales the result to viewport size.
 
 ```json
 {
-  "type": "custom_action",
-  "payload": {
-    "id": "launch_youtube",
-    "payload": {
-      "url": "https://youtube.com"
-    }
-  },
-  "timestamp": 1709012345678
+  "type": "screen_frame_request",
+  "viewport_width": 800,
+  "viewport_height": 600,
+  "zoom_level": 2.0
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | string | Action identifier (configured on PC) |
-| `payload` | object | Action-specific data |
+| `viewport_width` | integer | Client's display area width (pixels) |
+| `viewport_height` | integer | Client's display area height (pixels) |
+| `zoom_level` | float | Zoom level: 0.1 (zoomed out) to 5.0 (zoomed in) |
 
----
+**Server Calculation:**
+```
+capture_width = viewport_width × zoom_level
+capture_height = viewport_height × zoom_level
 
-## 5. Batch Commands (Optimization)
-
-For high-frequency updates (touchpad), multiple commands can be batched:
-
-```json
-{
-  "type": "batch",
-  "payload": {
-    "commands": [
-      { "type": "mouse_move", "payload": { "dx": 5, "dy": -2 } },
-      { "type": "mouse_move", "payload": { "dx": 3, "dy": -1 } },
-      { "type": "mouse_move", "payload": { "dx": 2, "dy": 0 } }
-    ]
-  },
-  "timestamp": 1709012345678
-}
+Example: 800×600 viewport at 2.0x zoom
+  capture = 1600×1200 (server captures this area around cursor)
+  output = 800×600 (server scales down to viewport size)
 ```
 
----
+**Zoom Semantics:**
+- `1.0x` = Native (1:1 mapping, capture = viewport)
+- `> 1.0x` = Zoomed in (capture MORE, scale DOWN, more detail)
+- `< 1.0x` = Zoomed out (capture LESS, scale UP, wider view)
 
-## 6. Protocol Extension Points
+### 5.2 Screen Frame (PC → Mobile)
 
-### 6.1 Future UDP Transport
-
-For high-frequency mouse updates, UDP can be used with a simpler binary format:
-
-```
-Byte Layout (12 bytes per mouse update):
-[0-1]   Sequence number (u16, big-endian)
-[2-3]   Command type (u16, 0x0001 = mouse_move)
-[4-7]   dx (i16, big-endian)
-[8-11]  dy (i16, big-endian)
-```
-
-### 6.2 Future Screen Streaming
+Server sends screen frames as viewport-sized images:
 
 ```json
 {
   "type": "screen_frame",
-  "payload": {
-    "format": "h264",
-    "width": 1920,
-    "height": 1080,
-    "data": "<base64-encoded-frame>"
-  },
-  "timestamp": 1709012345678
+  "cursor_x": 400,
+  "cursor_y": 300,
+  "monitor_id": 0,
+  "capture_width": 800,
+  "capture_height": 600,
+  "data": "<base64-encoded JPEG>"
 }
 ```
 
+| Field | Type | Description |
+|-------|------|-------------|
+| `cursor_x` | integer | Cursor X position (always viewport_width / 2) |
+| `cursor_y` | integer | Cursor Y position (always viewport_height / 2) |
+| `monitor_id` | integer | Monitor ID (0 = multi-monitor stitched) |
+| `capture_width` | integer | Frame width (equals viewport_width) |
+| `capture_height` | integer | Frame height (equals viewport_height) |
+| `data` | string | Base64-encoded JPEG image |
+
 ---
 
-## 7. Implementation Notes
+## 6. Implementation Notes
 
-### 7.1 Message Ordering
+### 6.1 Message Ordering
 
-- Messages are ordered by `timestamp`
-- Receiver should process in timestamp order
-- Late messages (>100ms old) may be dropped for mouse moves
-
-### 7.2 Connection Resilience
-
-- Mobile should buffer commands during disconnection
-- PC should not acknowledge every command (overhead)
+- Messages are processed in received order
 - Heartbeat interval: 5 seconds
 - Connection timeout: 30 seconds without heartbeat
 
-### 7.3 Performance
+### 6.2 Performance
 
-- Target: 60 messages/second for touchpad
-- Batch updates if network can't keep up
-- Compress large text inputs (future optimization)
+- Screen streaming: 5 FPS
+- Target latency: < 50ms
+- Images are JPEG-compressed for bandwidth efficiency
 
 ---
 
-*Last Updated: 2026-02-27*
-*Version: 1.0*
+*Last Updated: 2026-03-03*
+*Version: 2.0 - Server-side zoom with viewport-based capture*

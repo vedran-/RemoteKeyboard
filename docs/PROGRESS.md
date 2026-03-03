@@ -1,45 +1,60 @@
 # Implementation Progress Report
 
 **Date:** 2026-03-03
-**Status:** MVP Complete ✅
+**Status:** Server-Side Zoom Complete ✅
 **Test Coverage:** 110 tests passing (PC) + 82 tests passing (Mobile) = **192 total**
 
 ---
 
 ## 🎉 Latest Achievements
 
-### Pinch Zoom for Screen Streaming (2026-03-03) ✅
+### Server-Side Zoom with Viewport-Based Capture (2026-03-03) ✅
 
-**Feature Added:**
-- ✅ Pinch-to-zoom gesture on touchpad screen
-- ✅ Mouse wheel zoom (scroll up/down to zoom in/out)
-- ✅ Zoom range: 0.5x (50%) to 3.0x (300%)
-- ✅ Zoom indicator in app bar (tap to reset)
-- ✅ Visual feedback with toast notifications
-- ✅ Zoom affects capture dimensions sent to server
+**Problem Fixed:**
+- Inefficient bandwidth - client requested large captures that got scaled down
+- Client-side scaling wasted CPU and bandwidth
+- Complex protocol with multiple config options
 
-**How It Works:**
-- Client maintains base capture dimensions and zoom level
-- Actual capture size = base_size / zoom_level
-- Higher zoom = smaller capture area (zoomed in, more detail)
-- Lower zoom = larger capture area (zoomed out, wider view)
-- No server changes required - uses existing protocol
+**Solution Implemented:**
+- ✅ Client sends viewport dimensions + zoom level
+- ✅ Server calculates capture size: `capture = viewport × zoom`
+- ✅ Server scales to viewport size before sending
+- ✅ Always send viewport-sized images (efficient)
+- ✅ Zoom range: 0.1x (zoomed out) to 5.0x (zoomed in)
+- ✅ Clean protocol: `screen_frame_request` message
 
-**Input Methods:**
-1. **Pinch Gesture** (touch screens) - Pinch in/out with two fingers
-2. **Mouse Wheel** (Windows/desktop) - Scroll up/down to zoom
+**Protocol Message:**
+```json
+{
+  "type": "screen_frame_request",
+  "viewport_width": 800,
+  "viewport_height": 600,
+  "zoom_level": 2.0
+}
+```
 
 **Files Modified:**
-- `mobile/lib/domain/entities/command.dart` - ScreenControl (no zoom field, internal client feature)
-- `mobile/lib/application/services/screen_stream_service.dart` - Zoom logic and dimension calculation
-- `mobile/lib/presentation/screens/touchpad_screen.dart` - Pinch gesture handling, mouse wheel listener, UI
+- `pc/src/domain/entities/command.rs` - ScreenFrameRequest entity
+- `pc/src/infrastructure/screen_capture.rs` - Viewport-based capture + scaling
+- `pc/src/infrastructure/websocket/server.rs` - Handle screen_frame_request
+- `pc/src/infrastructure/config/mod.rs` - Removed screen_capture config
+- `pc/config.toml` - Simplified (no screen capture options)
+- `mobile/lib/domain/entities/command.dart` - ScreenFrameRequest entity
+- `mobile/lib/application/services/screen_stream_service.dart` - Viewport + zoom API
+- `mobile/lib/presentation/screens/touchpad_screen.dart` - Updated zoom range (0.1-5.0)
 
 **Tests Added:**
-- 13 unit tests for zoom functionality (all passing)
-- Tests for zoom in/out, reset, clamping, dimension calculation, mouse wheel steps
+- 11 unit tests for zoom functionality (all passing)
+- Tests for viewport-based requests, zoom clamping, message format
 
 **Documentation:**
-- `docs/ADR-PINCH-ZOOM.md` - Architecture Decision Record
+- `docs/PROTOCOL.md` - Updated with screen_frame_request protocol
+- `docs/ADR-PINCH-ZOOM.md` - Architecture Decision Record (rewritten)
+- `docs/PROGRESS.md` - This update
+
+---
+
+### Pinch Zoom and Mouse Wheel Zoom (2026-03-03) ✅
 
 ---
 

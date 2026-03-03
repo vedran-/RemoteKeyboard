@@ -44,13 +44,22 @@ pub struct ScreenFrame {
     pub data: String,  // Base64 encoded JPEG
 }
 
-/// Screen control messages (mobile → PC)
+/// Screen frame request from client (mobile → PC)
+/// Client sends viewport dimensions and zoom level, server calculates capture size
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ScreenControl {
-    pub enabled: bool,
-    pub capture_width: Option<u32>,    // Client-requested capture width
-    pub capture_height: Option<u32>,   // Client-requested capture height
-    pub max_dimension: Option<u32>,    // Max dimension for server downscaling
+pub struct ScreenFrameRequest {
+    pub viewport_width: u32,       // Client's display area width
+    pub viewport_height: u32,      // Client's display area height
+    pub zoom_level: f32,           // Zoom level: 0.1 (zoomed out) to 5.0 (zoomed in)
+}
+
+impl ScreenFrameRequest {
+    /// Calculate capture dimensions from viewport and zoom
+    pub fn capture_dimensions(&self) -> (u32, u32) {
+        let capture_width = (self.viewport_width as f32 * self.zoom_level) as u32;
+        let capture_height = (self.viewport_height as f32 * self.zoom_level) as u32;
+        (capture_width, capture_height)
+    }
 }
 
 /// Mouse command variants
