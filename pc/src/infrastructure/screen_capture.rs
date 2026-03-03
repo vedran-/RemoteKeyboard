@@ -104,28 +104,24 @@ impl ScreenCaptureService {
 
     /// Set capture dimensions
     pub fn set_capture_dimensions(&self, width: u32, height: u32) {
-        let clamped_width = width.clamp(100, 800);
-        let clamped_height = height.clamp(100, 800);
-        
         let mut current_width = self.capture_width.lock().unwrap();
         let mut current_height = self.capture_height.lock().unwrap();
-        
-        if *current_width != clamped_width || *current_height != clamped_height {
-            info!("Capture dimensions changed: {}x{} -> {}x{}", 
-                  *current_width, *current_height, clamped_width, clamped_height);
-            *current_width = clamped_width;
-            *current_height = clamped_height;
+
+        if *current_width != width || *current_height != height {
+            info!("Capture dimensions changed: {}x{} -> {}x{}",
+                  *current_width, *current_height, width, height);
+            *current_width = width;
+            *current_height = height;
         }
     }
 
     /// Set max dimension for downscaling
     pub fn set_max_dimension(&self, max: u32) {
-        let clamped_max = max.clamp(200, 800);
         let mut current = self.max_dimension.lock().unwrap();
-        
-        if *current != clamped_max {
-            info!("Max dimension changed: {} -> {}", *current, clamped_max);
-            *current = clamped_max;
+
+        if *current != max {
+            info!("Max dimension changed: {} -> {}", *current, max);
+            *current = max;
         }
     }
 
