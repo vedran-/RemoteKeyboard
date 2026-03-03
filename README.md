@@ -10,6 +10,17 @@
 
 ---
 
+## ✨ What Makes It Unique
+
+> **📱 Screen-Streaming Touchpad** – Unlike other remote control apps, RemoteKeyboard streams a live screenshot of the area around your PC cursor directly to your phone's touchpad.
+>
+> **Why this matters:** Control your PC when you **can't see the screen**:
+> - **Music/podcasts with display off** – Listen to YouTube, Spotify, or podcasts with the monitor/TV off; see what's playing on your phone and control it without turning the screen on
+> - **Monitor out of view** – PC connected to TV in another room or obscured location
+> - **Quick adjustments** – Change volume, skip tracks, or navigate without needing visual access to the display
+
+---
+
 ## 🎯 Overview
 
 RemoteKeyboard lets you control your PC (especially useful for PC connected to TV) from your Android or Windows phone using:

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use image::{ImageFormat, imageops};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use tracing::{debug, info};
+use tracing::{debug};
 
 use crate::application::ports::{Result, Error};
 use crate::domain::entities::command::ScreenFrame;
@@ -31,8 +31,8 @@ impl ScreenCaptureService {
         let default_w = config.screen_capture.default_width;
         let default_h = config.screen_capture.default_height;
         
-        info!("Screen capture initialized (Windows Graphics Capture API)");
-        info!("Using max_dimension={}, default capture={}x{}", 
+        debug!("Screen capture initialized (Windows Graphics Capture API)");
+        debug!("Using max_dimension={}, default capture={}x{}",
               max_dim, default_w, default_h);
         
         Ok(ScreenCaptureService {
@@ -108,7 +108,7 @@ impl ScreenCaptureService {
         let mut current_height = self.capture_height.lock().unwrap();
 
         if *current_width != width || *current_height != height {
-            info!("Capture dimensions changed: {}x{} -> {}x{}",
+            debug!("Capture dimensions changed: {}x{} -> {}x{}",
                   *current_width, *current_height, width, height);
             *current_width = width;
             *current_height = height;
@@ -120,7 +120,7 @@ impl ScreenCaptureService {
         let mut current = self.max_dimension.lock().unwrap();
 
         if *current != max {
-            info!("Max dimension changed: {} -> {}", *current, max);
+            debug!("Max dimension changed: {} -> {}", *current, max);
             *current = max;
         }
     }

@@ -264,7 +264,7 @@ fn get_monitor_at_cursor() -> Result<(Monitor, i32, i32, i32, i32), Box<dyn std:
             mi.rcMonitor.bottom,
         );
         
-        tracing::info!("Windows API: monitor at cursor is {}x{} at ({},{})", 
+        tracing::debug!("Windows API: monitor at cursor is {}x{} at ({},{})", 
                       right - left, bottom - top, left, top);
         
         // Create windows-capture Monitor directly from HMONITOR handle
@@ -273,7 +273,7 @@ fn get_monitor_at_cursor() -> Result<(Monitor, i32, i32, i32, i32), Box<dyn std:
         let m_width = monitor.width()? as i32;
         let m_height = monitor.height()? as i32;
         
-        tracing::info!("windows-capture: monitor is {}x{} (physical pixels)", m_width, m_height);
+        tracing::debug!("windows-capture: monitor is {}x{} (physical pixels)", m_width, m_height);
         
         Ok((monitor, left, top, right, bottom))
     }
@@ -321,15 +321,15 @@ pub fn get_screen_area_around_cursor(
     width: u32,
     height: u32
 ) -> Result<RgbaImage, Box<dyn std::error::Error>> {
-    tracing::info!("Capture request: {}x{}", width, height);
+    tracing::debug!("Capture request: {}x{}", width, height);
 
     // 1. Get cursor position in LOGICAL coordinates (Windows API)
     let (cursor_logical_x, cursor_logical_y) = get_cursor_position()?;
-    tracing::info!("Cursor position (logical): ({}, {})", cursor_logical_x, cursor_logical_y);
+    tracing::debug!("Cursor position (logical): ({}, {})", cursor_logical_x, cursor_logical_y);
 
     // 2. Get ALL monitors with their bounds
     let all_monitors = get_all_monitors()?;
-    tracing::info!("Found {} monitor(s)", all_monitors.len());
+    tracing::debug!("Found {} monitor(s)", all_monitors.len());
     
     // 3. Find cursor's monitor and get its scale (this is our reference scale)
     let cursor_monitor_info = all_monitors.iter()
@@ -348,13 +348,13 @@ pub fn get_screen_area_around_cursor(
         })
         .unwrap_or((1.0, 1.0));
     
-    tracing::info!("Cursor monitor scale: ({:.2}, {:.2})", cursor_scale_x, cursor_scale_y);
+    tracing::debug!("Cursor monitor scale: ({:.2}, {:.2})", cursor_scale_x, cursor_scale_y);
     
     // 4. Convert cursor to PHYSICAL coordinates
     let cursor_phys_x = (cursor_logical_x as f32 * cursor_scale_x) as i32;
     let cursor_phys_y = (cursor_logical_y as f32 * cursor_scale_y) as i32;
     
-    tracing::info!("Cursor position (physical): ({}, {})", cursor_phys_x, cursor_phys_y);
+    tracing::debug!("Cursor position (physical): ({}, {})", cursor_phys_x, cursor_phys_y);
     
     // 5. Define capture region in PHYSICAL coordinates (centered on cursor)
     let capture_left_phys = cursor_phys_x - (width as i32 / 2);
@@ -362,14 +362,14 @@ pub fn get_screen_area_around_cursor(
     let capture_right_phys = capture_left_phys + width as i32;
     let capture_bottom_phys = capture_top_phys + height as i32;
     
-    tracing::info!("Capture region (physical): ({},{}) to ({},{})", 
+    tracing::debug!("Capture region (physical): ({},{}) to ({},{})", 
                   capture_left_phys, capture_top_phys,
                   capture_right_phys, capture_bottom_phys);
 
     // 6. Find all monitors that intersect with capture region (in PHYSICAL coords)
     let mut relevant_monitors = Vec::new();
     
-    tracing::info!("Checking {} monitor(s) for intersection with capture region", all_monitors.len());
+    tracing::debug!("Checking {} monitor(s) for intersection with capture region", all_monitors.len());
     
     for (monitor, m_left_logical, m_top_logical, m_right_logical, m_bottom_logical) in all_monitors {
         // Get this monitor's scale and physical bounds
@@ -390,7 +390,7 @@ pub fn get_screen_area_around_cursor(
         let monitor_phys_right = monitor_phys_left + monitor_physical_width;
         let monitor_phys_bottom = monitor_phys_top + monitor_physical_height;
         
-        tracing::info!("Monitor: logical=({},{})-({},{}) physical=({},{})-({},{}) scale=({:.2},{:.2})",
+        tracing::debug!("Monitor: logical=({},{})-({},{}) physical=({},{})-({},{}) scale=({:.2},{:.2})",
                       m_left_logical, m_top_logical, m_right_logical, m_bottom_logical,
                       monitor_phys_left, monitor_phys_top, monitor_phys_right, monitor_phys_bottom,
                       scale_x, scale_y);
@@ -403,7 +403,7 @@ pub fn get_screen_area_around_cursor(
             capture_top_phys >= monitor_phys_bottom      // Capture is entirely below
         );
         
-        tracing::info!("  Capture physical=({},{})-({},{}) intersects={}",
+        tracing::debug!("  Capture physical=({},{})-({},{}) intersects={}",
                       capture_left_phys, capture_top_phys,
                       capture_right_phys, capture_bottom_phys,
                       intersects);
@@ -427,7 +427,7 @@ pub fn get_screen_area_around_cursor(
             let canvas_x = ((overlap_left - capture_left_phys) as f32).round().max(0.0) as u32;
             let canvas_y = ((overlap_top - capture_top_phys) as f32).round().max(0.0) as u32;
             
-            tracing::info!("  Overlap: physical=({},{})-({},{}) crop=({},{}) {}x{} canvas=({},{})",
+            tracing::debug!("  Overlap: physical=({},{})-({},{}) crop=({},{}) {}x{} canvas=({},{})",
                           overlap_left, overlap_top, overlap_right, overlap_bottom,
                           physical_crop_x, physical_crop_y,
                           physical_crop_w, physical_crop_h,
@@ -552,7 +552,7 @@ pub fn get_screen_area_around_cursor(
             physical_img
         };
         
-        tracing::info!("Successfully captured {}x{} (scaled to {}x{}) from monitor at canvas ({},{})", 
+        tracing::debug!("Successfully captured {}x{} (scaled to {}x{}) from monitor at canvas ({},{})", 
                       frame.crop_width, frame.crop_height,
                       monitor_img.width(), monitor_img.height(),
                       frame.canvas_offset_x, frame.canvas_offset_y);

@@ -6,6 +6,21 @@
 use serde::Deserialize;
 use std::path::Path;
 
+/// Logging configuration
+#[derive(Debug, Clone, Deserialize)]
+pub struct LoggingConfig {
+    /// Log level: error, warn, info, debug, trace
+    pub level: String,
+}
+
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        Self {
+            level: "info".to_string(),
+        }
+    }
+}
+
 /// Screen capture configuration
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScreenCaptureConfig {
@@ -30,12 +45,14 @@ impl Default for ScreenCaptureConfig {
 /// Application configuration
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppConfig {
+    pub logging: LoggingConfig,
     pub screen_capture: ScreenCaptureConfig,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
+            logging: LoggingConfig::default(),
             screen_capture: ScreenCaptureConfig::default(),
         }
     }
@@ -43,26 +60,27 @@ impl Default for AppConfig {
 
 impl AppConfig {
     /// Load configuration from config.toml
-    /// 
+    ///
     /// Looks for config.toml in:
     /// 1. Current working directory (where .exe is run from)
     /// 2. Falls back to default values if not found
     pub fn load() -> Self {
         let config_path = Path::new("config.toml");
-        
+
         if !config_path.exists() {
             tracing::warn!("config.toml not found, using default values");
             return Self::default();
         }
-        
+
         match config::Config::builder()
-            .add_source(config::File::from(config_path))
+            .add_source(config::File::from(config_path).format(config::FileFormat::Toml))
             .build()
         {
             Ok(cfg) => {
                 match cfg.try_deserialize::<Self>() {
                     Ok(config) => {
-                        tracing::info!("Loaded config.toml: max_dimension={}, default={}x{}",
+                        tracing::info!("Loaded config.toml: log_level={}, max_dimension={}, default={}x{}",
+                                      config.logging.level,
                                       config.screen_capture.max_dimension,
                                       config.screen_capture.default_width,
                                       config.screen_capture.default_height);
@@ -81,6 +99,11 @@ impl AppConfig {
                 Self::default()
             }
         }
+    }
+
+    /// Get the logging level as a string for tracing subscriber
+    pub fn get_log_level(&self) -> &str {
+        &self.logging.level
     }
 }
 

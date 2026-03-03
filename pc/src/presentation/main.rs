@@ -9,11 +9,15 @@
 use tracing_subscriber::{self, EnvFilter};
 
 fn main() {
-    // Initialize logging
+    // Load configuration FIRST (before logging init)
+    let config = remote_keyboard_pc::infrastructure::config::AppConfig::load();
+    let log_level = config.get_log_level();
+
+    // Initialize logging with configured level
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::from_default_env()
-                .add_directive("remote_keyboard_pc=debug".parse().unwrap())
+                .add_directive(format!("remote_keyboard_pc={}", log_level).parse().unwrap())
                 .add_directive("info".parse().unwrap()),
         )
         .init();
