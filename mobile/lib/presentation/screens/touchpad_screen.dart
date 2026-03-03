@@ -6,6 +6,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../application/services/services.dart';
@@ -36,6 +37,10 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
   double? _touchpadWidth;
   double? _touchpadHeight;
 
+  // Pinch zoom state
+  double _currentZoom = 1.0;
+  double _initialZoom = 1.0;
+
   double get _sensitivity {
     switch (_sensitivityLevel.toLowerCase()) {
       case 'low':
@@ -51,14 +56,68 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
     }
   }
 
-  void _handlePanUpdate(DragUpdateDetails details) {
-    if (!widget.connectionService.isConnected) return;
-
-    final dx = (details.delta.dx * _sensitivity).round();
-    final dy = (details.delta.dy * _sensitivity).round();
-
-    widget.commandService.sendMouseMove(dx, dy);
+  /// Handle pinch zoom gesture
+  void _handleScaleStart(ScaleStartDetails details) {
+    _initialZoom = _currentZoom;
+    // Store initial focal point for pan calculation
+    _lastFocalPoint = details.focalPoint;
   }
+
+  /// Handle pinch zoom gesture (and pan for mouse control)
+  void _handleScaleUpdate(ScaleUpdateDetails details) {
+    if (!widget.screenStreamService.isStreaming) return;
+    
+    // Multi-touch (pointerCount > 1) = pinch zoom
+    if (details.pointerCount > 1) {
+      // Calculate new zoom level based on pinch gesture
+      final newZoom = (_initialZoom * details.scale).clamp(0.5, 3.0);
+      
+      setState(() {
+        _currentZoom = newZoom;
+      });
+      
+      // Update service with new zoom level (don't notify server continuously during gesture)
+      widget.screenStreamService.setZoomLevel(newZoom, notifyServer: false);
+    } 
+    // Single touch (pointerCount == 1) = pan for mouse control
+    else {
+      // Calculate drag delta from focal point movement
+      final delta = details.focalPoint - _lastFocalPoint;
+      _lastFocalPoint = details.focalPoint;
+      
+      if (!widget.connectionService.isConnected) return;
+      
+      final dx = (delta.dx * _sensitivity).round();
+      final dy = (delta.dy * _sensitivity).round();
+      
+      widget.commandService.sendMouseMove(dx, dy);
+    }
+  }
+
+  /// Handle pinch gesture end - send final zoom to server
+  void _handleScaleEnd(ScaleEndDetails details) {
+    // Only handle zoom if pointer count > 1 (multi-touch pinch)
+    if (details.pointerCount > 1 && widget.screenStreamService.isStreaming) {
+      // Round zoom to nearest 0.25 increment for cleaner values
+      final roundedZoom = ((_currentZoom * 4).round() / 4).clamp(0.5, 3.0);
+      
+      setState(() {
+        _currentZoom = roundedZoom;
+      });
+      
+      // Send final zoom level to server
+      widget.screenStreamService.setZoomLevel(roundedZoom, notifyServer: true);
+      
+      widget.notificationService.info(
+        context,
+        'Zoom: ${(roundedZoom * 100).toInt()}%',
+        duration: const Duration(milliseconds: 800),
+      );
+    }
+  }
+
+  // Store last focal point for pan delta calculation
+  Offset _lastFocalPoint = Offset.zero;
 
   void _handleTap() {
     if (!widget.connectionService.isConnected) {
@@ -128,6 +187,7 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
         captureWidth: captureWidth,
         captureHeight: captureHeight,
         maxDimension: 400,  // Server will downscale if larger
+        zoomLevel: _currentZoom,
       );
       widget.notificationService.info(context, 'Screen streaming started (${captureWidth}x$captureHeight)');
     }
@@ -141,6 +201,50 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
       appBar: AppBar(
         title: const Text('Touchpad'),
         actions: [
+          // Zoom level indicator and reset (only when streaming)
+          if (widget.screenStreamService.isStreaming)
+            ListenableBuilder(
+              listenable: widget.screenStreamService,
+              builder: (context, _) {
+                final zoomPercent = (widget.screenStreamService.zoomLevel * 100).toInt();
+                return GestureDetector(
+                  onTap: () {
+                    // Reset zoom on tap
+                    setState(() {
+                      _currentZoom = 1.0;
+                    });
+                    widget.screenStreamService.resetZoom();
+                    widget.notificationService.info(context, 'Zoom reset to 100%');
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Zoom',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+                          ),
+                        ),
+                        Text(
+                          '$zoomPercent%',
+                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
           // Screen streaming toggle
           IconButton(
             icon: Icon(
@@ -220,11 +324,38 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
                       }
                     }
 
-                    return GestureDetector(
-                      onPanUpdate: _handlePanUpdate,
-                      onTap: _handleTap,
-                      onSecondaryTap: _handleSecondaryTap,
-                      child: Container(
+                    return Listener(
+                      onPointerSignal: (event) {
+                        // Handle mouse wheel for zoom (only when streaming)
+                        if (!isStreaming) return;
+
+                        if (event is PointerScrollEvent) {
+                          // Determine zoom direction from scroll
+                          final scrollDelta = event.scrollDelta.dy;
+
+                          // Scroll up (negative) = zoom in, Scroll down (positive) = zoom out
+                          if (scrollDelta < 0) {
+                            widget.screenStreamService.zoomIn(step: 0.1);
+                          } else if (scrollDelta > 0) {
+                            widget.screenStreamService.zoomOut(step: 0.1);
+                          }
+
+                          // Show zoom level feedback
+                          final newZoom = widget.screenStreamService.zoomLevel;
+                          widget.notificationService.info(
+                            context,
+                            'Zoom: ${(newZoom * 100).toInt()}%',
+                            duration: const Duration(milliseconds: 800),
+                          );
+                        }
+                      },
+                      child: GestureDetector(
+                        onScaleStart: _handleScaleStart,
+                        onScaleUpdate: _handleScaleUpdate,
+                        onScaleEnd: _handleScaleEnd,
+                        onTap: _handleTap,
+                        onSecondaryTap: _handleSecondaryTap,
+                        child: Container(
                         margin: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: isDisconnected
@@ -298,6 +429,7 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
                               ),
                           ],
                         ),
+                      ),
                       ),
                     );
                   },

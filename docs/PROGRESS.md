@@ -1,12 +1,47 @@
 # Implementation Progress Report
 
-**Date:** 2026-03-01  
-**Status:** MVP Complete ✅  
-**Test Coverage:** 110 tests passing (PC) + 71 tests passing (Mobile) = **181 total**  
+**Date:** 2026-03-03
+**Status:** MVP Complete ✅
+**Test Coverage:** 110 tests passing (PC) + 82 tests passing (Mobile) = **192 total**
 
 ---
 
 ## 🎉 Latest Achievements
+
+### Pinch Zoom for Screen Streaming (2026-03-03) ✅
+
+**Feature Added:**
+- ✅ Pinch-to-zoom gesture on touchpad screen
+- ✅ Mouse wheel zoom (scroll up/down to zoom in/out)
+- ✅ Zoom range: 0.5x (50%) to 3.0x (300%)
+- ✅ Zoom indicator in app bar (tap to reset)
+- ✅ Visual feedback with toast notifications
+- ✅ Zoom affects capture dimensions sent to server
+
+**How It Works:**
+- Client maintains base capture dimensions and zoom level
+- Actual capture size = base_size / zoom_level
+- Higher zoom = smaller capture area (zoomed in, more detail)
+- Lower zoom = larger capture area (zoomed out, wider view)
+- No server changes required - uses existing protocol
+
+**Input Methods:**
+1. **Pinch Gesture** (touch screens) - Pinch in/out with two fingers
+2. **Mouse Wheel** (Windows/desktop) - Scroll up/down to zoom
+
+**Files Modified:**
+- `mobile/lib/domain/entities/command.dart` - ScreenControl (no zoom field, internal client feature)
+- `mobile/lib/application/services/screen_stream_service.dart` - Zoom logic and dimension calculation
+- `mobile/lib/presentation/screens/touchpad_screen.dart` - Pinch gesture handling, mouse wheel listener, UI
+
+**Tests Added:**
+- 13 unit tests for zoom functionality (all passing)
+- Tests for zoom in/out, reset, clamping, dimension calculation, mouse wheel steps
+
+**Documentation:**
+- `docs/ADR-PINCH-ZOOM.md` - Architecture Decision Record
+
+---
 
 ### Physical Cursor Coordinates for Multi-Monitor (2026-03-01) ✅
 

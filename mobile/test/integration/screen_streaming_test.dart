@@ -166,6 +166,229 @@ void main() {
 
       service.dispose();
     });
+
+    group('Zoom Control', () {
+      test('default zoom level is 1.0', () {
+        final mockClient = MockWebSocketClient();
+        final service = ScreenStreamService(mockClient);
+        
+        expect(service.zoomLevel, 1.0);
+        
+        service.dispose();
+      });
+
+      test('start streaming with custom zoom level', () {
+        final mockClient = MockWebSocketClient();
+        final service = ScreenStreamService(mockClient);
+        
+        // Start with base dimensions 400x300 at 1.5x zoom
+        service.startStreaming(captureWidth: 400, captureHeight: 300, zoomLevel: 1.5);
+        
+        expect(service.zoomLevel, 1.5);
+        // At 1.5x zoom, capture should be smaller: 400/1.5 = 266, 300/1.5 = 200
+        expect(service.captureWidth, 267);
+        expect(service.captureHeight, 200);
+        
+        // Verify capture dimensions were sent to server
+        final controlMessage = mockClient.sentMessages.firstWhere(
+          (m) => m['type'] == 'custom',
+        );
+        final payload = controlMessage['payload'] as Map<String, dynamic>;
+        expect(payload['capture_width'], 267);
+        expect(payload['capture_height'], 200);
+        
+        service.dispose();
+      });
+
+      test('zoom in reduces capture dimensions', () {
+        final mockClient = MockWebSocketClient();
+        final service = ScreenStreamService(mockClient);
+        service.startStreaming(captureWidth: 400, captureHeight: 300);
+        
+        final initialWidth = service.captureWidth;
+        final initialHeight = service.captureHeight;
+        
+        service.zoomIn(step: 0.5);
+        
+        expect(service.zoomLevel, 1.5);
+        // Higher zoom = smaller capture
+        expect(service.captureWidth, lessThan(initialWidth));
+        expect(service.captureHeight, lessThan(initialHeight));
+        
+        service.dispose();
+      });
+
+      test('zoom out increases capture dimensions', () {
+        final mockClient = MockWebSocketClient();
+        final service = ScreenStreamService(mockClient);
+        service.startStreaming(captureWidth: 400, captureHeight: 300);
+        
+        final initialWidth = service.captureWidth;
+        final initialHeight = service.captureHeight;
+        
+        service.zoomOut(step: 0.5);
+        
+        expect(service.zoomLevel, 0.5);
+        // Lower zoom = larger capture
+        expect(service.captureWidth, greaterThan(initialWidth));
+        expect(service.captureHeight, greaterThan(initialHeight));
+        
+        service.dispose();
+      });
+
+      test('setZoomLevel with notifyServer=false does not send message', () {
+        final mockClient = MockWebSocketClient();
+        final service = ScreenStreamService(mockClient);
+        service.startStreaming(captureWidth: 400, captureHeight: 300);
+        
+        final initialMessageCount = mockClient.sentMessages.length;
+        
+        service.setZoomLevel(2.0, notifyServer: false);
+        
+        expect(service.zoomLevel, 2.0);
+        expect(service.captureWidth, 200);  // 400 / 2.0
+        expect(service.captureHeight, 150);  // 300 / 2.0
+        expect(mockClient.sentMessages.length, initialMessageCount);
+        
+        service.dispose();
+      });
+
+      test('resetZoom returns to 1.0 and restores base dimensions', () {
+        final mockClient = MockWebSocketClient();
+        final service = ScreenStreamService(mockClient);
+        service.startStreaming(captureWidth: 400, captureHeight: 300, zoomLevel: 2.0);
+        
+        expect(service.captureWidth, 200);  // 400 / 2.0
+        
+        service.resetZoom();
+        
+        expect(service.zoomLevel, 1.0);
+        expect(service.captureWidth, 400);  // Back to base
+        expect(service.captureHeight, 300);  // Back to base
+        
+        service.dispose();
+      });
+
+      test('zoom level is clamped to valid range (0.5 to 3.0)', () {
+        final mockClient = MockWebSocketClient();
+        final service = ScreenStreamService(mockClient);
+        service.startStreaming(captureWidth: 400, captureHeight: 300);
+        
+        // Try to zoom in beyond max (3.0x)
+        service.setZoomLevel(5.0);
+        expect(service.zoomLevel, 3.0);
+        expect(service.captureWidth, 133);  // 400 / 3.0
+        
+        // Try to zoom out beyond min (0.5x)
+        service.setZoomLevel(0.1);
+        expect(service.zoomLevel, 0.5);
+        expect(service.captureWidth, 800);  // 400 / 0.5
+        
+        service.dispose();
+      });
+
+      test('capture dimensions are clamped to valid range', () {
+        final mockClient = MockWebSocketClient();
+        final service = ScreenStreamService(mockClient);
+        service.startStreaming(captureWidth: 400, captureHeight: 300);
+        
+        // Extreme zoom in should not go below 100px
+        service.setZoomLevel(10.0);
+        expect(service.zoomLevel, 3.0);  // Zoom is clamped to 3.0
+        expect(service.captureWidth, 133);  // 400 / 3.0 = 133 (still above 100 minimum)
+        
+        // Test with smaller base dimension to hit the 100px clamp
+        service.setCaptureDimensions(150, 150);
+        service.setZoomLevel(3.0);
+        expect(service.captureWidth, 100);  // 150 / 3.0 = 50, clamped to 100
+        
+        service.dispose();
+      });
+
+      test('zoom control message format with calculated dimensions', () {
+        final mockClient = MockWebSocketClient();
+        final service = ScreenStreamService(mockClient);
+        
+        service.startStreaming(
+          captureWidth: 400,
+          captureHeight: 300,
+          zoomLevel: 2.0,
+        );
+        
+        // Find the control message
+        final controlMessage = mockClient.sentMessages.firstWhere(
+          (m) => m['type'] == 'custom',
+        );
+        
+        expect(controlMessage['type'], 'custom');
+        final payload = controlMessage['payload'] as Map<String, dynamic>;
+        expect(payload['enabled'], true);
+        expect(payload['capture_width'], 200);  // 400 / 2.0
+        expect(payload['capture_height'], 150);  // 300 / 2.0
+        // Note: zoom_level is NOT sent to server, only calculated dimensions
+        
+        service.dispose();
+      });
+
+      test('setCaptureDimensions updates base dimensions', () {
+        final mockClient = MockWebSocketClient();
+        final service = ScreenStreamService(mockClient);
+        service.startStreaming(captureWidth: 400, captureHeight: 300, zoomLevel: 1.0);
+        
+        expect(service.captureWidth, 400);
+        expect(service.captureHeight, 300);
+        
+        service.setCaptureDimensions(800, 600);
+        
+        expect(service.captureWidth, 800);
+        expect(service.captureHeight, 600);
+        
+        service.dispose();
+      });
+
+      test('setCaptureDimensions with zoom applies scaling', () {
+        final mockClient = MockWebSocketClient();
+        final service = ScreenStreamService(mockClient);
+        service.startStreaming(captureWidth: 400, captureHeight: 300, zoomLevel: 2.0);
+        
+        expect(service.captureWidth, 200);  // 400 / 2.0
+        
+        service.setCaptureDimensions(800, 600);
+        
+        expect(service.captureWidth, 400);  // 800 / 2.0
+        expect(service.captureHeight, 300);  // 600 / 2.0
+        
+        service.dispose();
+      });
+
+      test('zoomIn with custom step increases zoom', () {
+        final mockClient = MockWebSocketClient();
+        final service = ScreenStreamService(mockClient);
+        service.startStreaming(captureWidth: 400, captureHeight: 300);
+        
+        service.zoomIn(step: 0.1);
+        expect(service.zoomLevel, closeTo(1.1, 0.001));
+        
+        service.zoomIn(step: 0.1);
+        expect(service.zoomLevel, closeTo(1.2, 0.001));
+        
+        service.dispose();
+      });
+
+      test('zoomOut with custom step decreases zoom', () {
+        final mockClient = MockWebSocketClient();
+        final service = ScreenStreamService(mockClient);
+        service.startStreaming(captureWidth: 400, captureHeight: 300);
+        
+        service.zoomOut(step: 0.1);
+        expect(service.zoomLevel, closeTo(0.9, 0.001));
+        
+        service.zoomOut(step: 0.1);
+        expect(service.zoomLevel, closeTo(0.8, 0.001));
+        
+        service.dispose();
+      });
+    });
   });
 }
 

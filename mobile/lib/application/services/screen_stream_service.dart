@@ -20,14 +20,15 @@ typedef ScreenFrameCallback = void Function(ScreenFrame frame);
 class ScreenStreamService extends ChangeNotifier {
   final WebSocketClient _client;
   final void Function(String message, {String? title, bool isError})? onError;
-  
+
   ScreenFrame? _currentFrame;
   bool _isStreaming = false;
-  int _captureWidth = 200;   // Default capture width
-  int _captureHeight = 200;  // Default capture height
-  int _maxDimension = 400;   // Max dimension for server downscaling
+  int _baseCaptureWidth = 400;   // Base capture width (at 1.0x zoom)
+  int _baseCaptureHeight = 300;  // Base capture height (at 1.0x zoom)
+  int _maxDimension = 400;       // Max dimension for server downscaling
+  double _zoomLevel = 1.0;       // Current zoom level (1.0 = 100%)
   StreamSubscription? _messageSubscription;
-  
+
   // Cached decoded image to prevent flickering
   ui.Image? _decodedImage;
   Uint8List? _lastImageData;  // To detect if image data changed
@@ -41,19 +42,28 @@ class ScreenStreamService extends ChangeNotifier {
   /// Whether streaming is enabled
   bool get isStreaming => _isStreaming;
 
-  /// Current capture width
-  int get captureWidth => _captureWidth;
+  /// Current zoom level
+  double get zoomLevel => _zoomLevel;
 
-  /// Current capture height
-  int get captureHeight => _captureHeight;
+  /// Get current capture width based on zoom level
+  /// Higher zoom = smaller capture area (zoomed in)
+  /// Lower zoom = larger capture area (zoomed out)
+  int get captureWidth => (_baseCaptureWidth / _zoomLevel).round().clamp(100, 1920);
+
+  /// Get current capture height based on zoom level
+  int get captureHeight => (_baseCaptureHeight / _zoomLevel).round().clamp(100, 1080);
 
   ScreenStreamService(this._client, {this.onError});
 
-  /// Start screen streaming with optional dimensions
+  /// Start screen streaming with optional dimensions and zoom
+  /// 
+  /// [captureWidth] and [captureHeight] are the base dimensions at 1.0x zoom.
+  /// Actual capture size will be scaled by zoom level.
   void startStreaming({
     int? captureWidth,
     int? captureHeight,
     int? maxDimension,
+    double? zoomLevel,
   }) {
     if (_isStreaming) {
       debugPrint('[ScreenStream] Already streaming, ignoring start request');
@@ -62,11 +72,12 @@ class ScreenStreamService extends ChangeNotifier {
     }
 
     _isStreaming = true;
-    _captureWidth = captureWidth ?? 200;
-    _captureHeight = captureHeight ?? 200;
+    _baseCaptureWidth = captureWidth ?? 400;
+    _baseCaptureHeight = captureHeight ?? 300;
     _maxDimension = maxDimension ?? 400;
+    _zoomLevel = zoomLevel ?? 1.0;
 
-    // Send control message to PC
+    // Send control message to PC with calculated dimensions
     _sendControlMessage();
 
     // Listen for screen frames
@@ -84,7 +95,7 @@ class ScreenStreamService extends ChangeNotifier {
     });
 
     notifyListeners();
-    debugPrint('[ScreenStream] Streaming started at ${_captureWidth}x${_captureHeight}');
+    debugPrint('[ScreenStream] Streaming started at ${captureWidth}x${captureHeight} (zoom: ${_zoomLevel}x, actual: ${this.captureWidth}x${this.captureHeight})');
     onError?.call('Screen streaming started', title: 'Screen Stream', isError: false);
   }
 
@@ -106,29 +117,60 @@ class ScreenStreamService extends ChangeNotifier {
     debugPrint('[ScreenStream] Streaming stopped');
   }
 
-  /// Set capture dimensions (for when touchpad size changes)
+  /// Set base capture dimensions (at 1.0x zoom)
+  /// Actual capture size will be scaled by current zoom level
   void setCaptureDimensions(int width, int height, {int? maxDimension}) {
-    _captureWidth = width.clamp(100, 800);
-    _captureHeight = height.clamp(100, 800);
+    _baseCaptureWidth = width.clamp(100, 1920);
+    _baseCaptureHeight = height.clamp(100, 1080);
     if (maxDimension != null) {
       _maxDimension = maxDimension.clamp(200, 800);
     }
-    
+
     // Send updated control message if streaming
     if (_isStreaming) {
       _sendControlMessage();
     }
-    
+
     notifyListeners();
-    debugPrint('[ScreenStream] Capture dimensions set to ${_captureWidth}x${_captureHeight}');
+    debugPrint('[ScreenStream] Base dimensions set to ${_baseCaptureWidth}x${_baseCaptureHeight} (actual: ${captureWidth}x${captureHeight} at ${_zoomLevel}x zoom)');
+  }
+
+  /// Set zoom level (0.5x to 3.0x range)
+  /// Higher zoom = smaller capture area (zoomed in)
+  /// Lower zoom = larger capture area (zoomed out)
+  void setZoomLevel(double zoom, {bool notifyServer = true}) {
+    _zoomLevel = zoom.clamp(0.5, 3.0);
+    
+    // Send updated control message if streaming and notifyServer is true
+    if (_isStreaming && notifyServer) {
+      _sendControlMessage();
+    }
+
+    notifyListeners();
+    debugPrint('[ScreenStream] Zoom level set to ${_zoomLevel}x (capture: ${captureWidth}x${captureHeight})');
+  }
+
+  /// Reset zoom to 1.0x (100%)
+  void resetZoom() {
+    setZoomLevel(1.0);
+  }
+
+  /// Increase zoom by step (default 0.25x)
+  void zoomIn({double step = 0.25}) {
+    setZoomLevel(_zoomLevel + step);
+  }
+
+  /// Decrease zoom by step (default 0.25x)
+  void zoomOut({double step = 0.25}) {
+    setZoomLevel(_zoomLevel - step);
   }
 
   /// Send control message to PC
   void _sendControlMessage() {
     final control = ScreenControl(
       enabled: _isStreaming,
-      captureWidth: _isStreaming ? _captureWidth : null,
-      captureHeight: _isStreaming ? _captureHeight : null,
+      captureWidth: _isStreaming ? captureWidth : null,  // Use calculated dimension
+      captureHeight: _isStreaming ? captureHeight : null,  // Use calculated dimension
       maxDimension: _isStreaming ? _maxDimension : null,
     );
 
