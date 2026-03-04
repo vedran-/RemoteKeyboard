@@ -39,7 +39,7 @@ if "%1"=="install-android" goto :install_android
 
 echo Unknown command: %1
 echo Run 'build_run.bat' for usage.
-goto :eof
+exit /b 1
 
 :help
 echo.
@@ -70,8 +70,29 @@ echo Building ALL components...
 echo ============================================
 echo.
 call :build_pc
+if errorlevel 1 (
+    echo.
+    echo ============================================
+    echo BUILD ALL ABORTED - PC build failed
+    echo ============================================
+    exit /b 1
+)
 call :build_win
+if errorlevel 1 (
+    echo.
+    echo ============================================
+    echo BUILD ALL ABORTED - Windows build failed
+    echo ============================================
+    exit /b 1
+)
 call :build_android
+if errorlevel 1 (
+    echo.
+    echo ============================================
+    echo BUILD ALL ABORTED - Android build failed
+    echo ============================================
+    exit /b 1
+)
 echo.
 echo ============================================
 echo BUILD ALL COMPLETE
@@ -143,6 +164,13 @@ goto :eof
 
 :build_and_run_all
 call :build_all
+if errorlevel 1 (
+    echo.
+    echo ============================================
+    echo BUILD-RUN-ALL ABORTED - Build failed
+    echo ============================================
+    exit /b 1
+)
 call :run_both
 goto :eof
 
