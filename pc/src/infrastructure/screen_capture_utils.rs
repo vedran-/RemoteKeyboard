@@ -55,7 +55,7 @@ unsafe extern "system" fn monitor_enum_proc(
 
 /// Get all monitors with their physical bounds in virtual screen coordinates
 #[cfg(target_os = "windows")]
-fn get_all_monitors() -> Result<Vec<(Monitor, i32, i32, i32, i32)>, Box<dyn std::error::Error>> {
+pub fn get_all_monitors() -> Result<Vec<(Monitor, i32, i32, i32, i32)>, Box<dyn std::error::Error>> {
     let mut enum_data = MonitorEnumData {
         monitors: Vec::new(),
     };
@@ -209,7 +209,7 @@ impl GraphicsCaptureApiHandler for SingleFrameHandler {
 
 /// Get cursor position in virtual screen coordinates using Windows API
 #[cfg(target_os = "windows")]
-fn get_cursor_position() -> Result<(i32, i32), Box<dyn std::error::Error>> {
+pub fn get_cursor_position() -> Result<(i32, i32), Box<dyn std::error::Error>> {
     let mut point = POINT { x: 0, y: 0 };
     unsafe {
         if GetCursorPos(&mut point) != 0 {
@@ -259,7 +259,7 @@ fn get_monitor_at_cursor() -> Result<(Monitor, i32, i32, i32, i32), Box<dyn std:
 }
 
 /// Crop an image from full monitor capture
-fn crop_image(
+pub fn crop_image(
     pixels: &[u8],
     full_width: u32,
     full_height: u32,

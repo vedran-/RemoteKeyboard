@@ -3,7 +3,7 @@
 //! WebSocket server for receiving commands from mobile devices.
 //! Uses tokio-tungstenite for async WebSocket handling.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
@@ -155,9 +155,11 @@ async fn handle_connection(
     info!("WebSocket client connected");
 
     // 2. Setup screen streaming state
-    let mut screen_capture: Option<ScreenCaptureService> = None;
-    let (screen_tx, mut screen_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(5);
+    let screen_capture: Arc<Mutex<Option<ScreenCaptureService>>> = Arc::new(Mutex::new(None));
+    // Bounded channel with capacity 1 - drops old frames if client is slow
+    let (screen_tx, mut screen_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(1);
     let mut stream_cancel_token: Option<CancellationToken> = None;
+    let mut last_sent_seq: u64 = 0;  // For skip-if-unchanged
 
     // 3. Setup heartbeat state
     let mut last_pong_time = Instant::now();
@@ -188,18 +190,26 @@ async fn handle_connection(
                                         info!("StreamStart: {}x{} (zoom {:.2})", width, height, zoom);
 
                                         // Init capture service if needed
-                                        if screen_capture.is_none() {
-                                            match ScreenCaptureService::new() {
-                                                Ok(service) => screen_capture = Some(service),
-                                                Err(e) => {
-                                                    error!("Failed to init screen capture: {}", e);
-                                                    continue;
+                                        {
+                                            let mut capture_opt = screen_capture.lock().unwrap();
+                                            if capture_opt.is_none() {
+                                                match ScreenCaptureService::new() {
+                                                    Ok(service) => *capture_opt = Some(service),
+                                                    Err(e) => {
+                                                        error!("Failed to init screen capture: {}", e);
+                                                        continue;
+                                                    }
                                                 }
                                             }
                                         }
 
-                                        let capture = screen_capture.as_ref().unwrap();
-                                        capture.set_viewport_and_zoom(width, height, zoom);
+                                        // Set viewport
+                                        {
+                                            let capture_opt = screen_capture.lock().unwrap();
+                                            if let Some(capture) = capture_opt.as_ref() {
+                                                capture.set_viewport_and_zoom(width, height, zoom);
+                                            }
+                                        }
 
                                         // Abort existing stream task if any
                                         if let Some(token) = stream_cancel_token.take() {
@@ -209,29 +219,69 @@ async fn handle_connection(
                                         // Start new stream task
                                         let cancel_token = CancellationToken::new();
                                         stream_cancel_token = Some(cancel_token.clone());
-                                        let capture_clone = screen_capture.clone().unwrap();
+                                        let capture_arc = Arc::clone(&screen_capture);
                                         let tx = screen_tx.clone();
+                                        let mut last_seq = last_sent_seq;
 
                                         tokio::spawn(async move {
                                             info!("Screen streaming task started");
                                             let mut interval = tokio::time::interval(
                                                 Duration::from_millis(1000 / SCREEN_STREAM_FPS as u64)
                                             );
+                                            let mut frame_count = 0;
                                             loop {
                                                 tokio::select! {
                                                     _ = cancel_token.cancelled() => {
-                                                        info!("Screen streaming task stopped cleanly");
+                                                        info!("Screen streaming task stopped cleanly after {} frames", frame_count);
                                                         break;
                                                     }
                                                     _ = interval.tick() => {
-                                                        match capture_clone.capture_around_cursor() {
-                                                            Ok(jpeg_bytes) => {
-                                                                // Raw bytes, will be sent as Message::Binary
-                                                                if tx.send(jpeg_bytes).await.is_err() {
-                                                                    break; // Channel closed
-                                                                }
+                                                        // Check if channel is closed before capturing
+                                                        if tx.is_closed() {
+                                                            debug!("Channel closed, stopping stream");
+                                                            break;
+                                                        }
+                                                        
+                                                        // Get capture result while holding lock briefly
+                                                        let capture_result = {
+                                                            let capture_opt = capture_arc.lock().unwrap();
+                                                            if let Some(capture) = capture_opt.as_ref() {
+                                                                Some(capture.capture_around_cursor(last_seq))
+                                                            } else {
+                                                                None
                                                             }
-                                                            Err(e) => error!("Capture failed: {}", e),
+                                                        };
+                                                        
+                                                        // Process capture result
+                                                        if let Some(result) = capture_result {
+                                                            match result {
+                                                                Ok(Some((jpeg_bytes, new_seq))) => {
+                                                                    // Try to send frame - skip if client is busy
+                                                                    let frame_size = jpeg_bytes.len();
+                                                                    last_seq = new_seq;
+                                                                    match tx.try_send(jpeg_bytes) {
+                                                                        Ok(_) => {
+                                                                            frame_count += 1;
+                                                                            debug!("Sent frame #{}: {} bytes", frame_count, frame_size);
+                                                                        }
+                                                                        Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                                                                            // Client is still processing previous frame - skip this one
+                                                                            trace!("Client busy, skipping frame");
+                                                                        }
+                                                                        Err(e) => {
+                                                                            warn!("Channel error: {}", e);
+                                                                            break; // Channel closed
+                                                                        }
+                                                                    }
+                                                                }
+                                                                Ok(None) => {
+                                                                    // This should never happen now
+                                                                    warn!("Unexpected None from capture");
+                                                                }
+                                                                Err(e) => error!("Capture failed: {}", e),
+                                                            }
+                                                        } else {
+                                                            warn!("No capture service available");
                                                         }
                                                     }
                                                 }
@@ -241,7 +291,8 @@ async fn handle_connection(
 
                                     ClientMessage::StreamUpdate { width, height, zoom } => {
                                         debug!("StreamUpdate: {}x{} (zoom {:.2})", width, height, zoom);
-                                        if let Some(capture) = &screen_capture {
+                                        let capture_opt = screen_capture.lock().unwrap();
+                                        if let Some(capture) = capture_opt.as_ref() {
                                             capture.set_viewport_and_zoom(width, height, zoom);
                                         }
                                     }
@@ -313,8 +364,15 @@ async fn handle_connection(
     }
 
     // Cleanup on disconnect
+    info!("Cleaning up after disconnection");
     if let Some(token) = stream_cancel_token {
         token.cancel();
+    }
+    // Drop screen_tx to signal closed status to streaming task
+    drop(screen_tx);
+    // Disconnect screen capture
+    if let Ok(mut capture_opt) = screen_capture.lock() {
+        *capture_opt = None;
     }
     Ok(())
 }

@@ -1,122 +1,66 @@
 //! Screen Capture Service
 //!
 //! Captures screen area around cursor for streaming to mobile client.
-//! Uses Windows Graphics Capture API with multi-monitor stitching support.
+//! Uses CaptureManager with persistent Windows Graphics Capture sessions.
 
-use std::sync::Arc;
 use std::sync::Mutex;
-use image::{ImageFormat, imageops};
-use tracing::{debug};
+use tracing::debug;
 
-use crate::application::ports::{Result, Error};
-use crate::infrastructure::screen_capture_utils::get_screen_area_around_cursor;
+use crate::application::ports::Result;
+use crate::infrastructure::capture_manager::CaptureManager;
 
-/// Screen capture service
-#[derive(Clone)]
+/// Screen capture service with persistent capture sessions
 pub struct ScreenCaptureService {
-    viewport_width: Arc<Mutex<u32>>,
-    viewport_height: Arc<Mutex<u32>>,
-    zoom_level: Arc<Mutex<f32>>,
+    capture_manager: Mutex<CaptureManager>,
 }
 
 impl ScreenCaptureService {
     /// Create new screen capture service
     pub fn new() -> Result<Self> {
-        // Default values (will be overridden by client request)
-        debug!("Screen capture initialized (Windows Graphics Capture API)");
+        debug!("Screen capture initialized (persistent WGC sessions)");
 
         Ok(ScreenCaptureService {
-            viewport_width: Arc::new(Mutex::new(400)),
-            viewport_height: Arc::new(Mutex::new(300)),
-            zoom_level: Arc::new(Mutex::new(1.0)),
+            capture_manager: Mutex::new(CaptureManager::new()),
         })
     }
 
     /// Set viewport dimensions and zoom level from client request
     pub fn set_viewport_and_zoom(&self, viewport_width: u32, viewport_height: u32, zoom_level: f32) {
-        *self.viewport_width.lock().unwrap() = viewport_width;
-        *self.viewport_height.lock().unwrap() = viewport_height;
-        *self.zoom_level.lock().unwrap() = zoom_level.clamp(0.1, 5.0);
+        let mut manager = self.capture_manager.lock().unwrap();
+        manager.update_viewport(viewport_width, viewport_height, zoom_level);
         
-        let (capture_w, capture_h) = self.capture_dimensions();
-        debug!("Viewport set to {}x{}, zoom: {:.2}, capture: {}x{}", 
-               viewport_width, viewport_height, zoom_level, capture_w, capture_h);
+        let zoom_clamped = zoom_level.clamp(0.1, 5.0);
+        debug!("Viewport set to {}x{}, zoom: {:.2}", viewport_width, viewport_height, zoom_clamped);
     }
 
-    /// Calculate capture dimensions from viewport and zoom
-    fn capture_dimensions(&self) -> (u32, u32) {
-        let viewport_width = *self.viewport_width.lock().unwrap();
-        let viewport_height = *self.viewport_height.lock().unwrap();
-        let zoom_level = *self.zoom_level.lock().unwrap();
-        
-        let capture_width = (viewport_width as f32 * zoom_level) as u32;
-        let capture_height = (viewport_height as f32 * zoom_level) as u32;
-        (capture_width, capture_height)
-    }
-
-    /// Capture screen area around cursor
-    pub fn capture_around_cursor(&self) -> Result<Vec<u8>> {
-        let viewport_width = *self.viewport_width.lock().map_err(|e| {
-            Error::internal(format!("Mutex poisoned: {}", e))
-        })?;
-        let viewport_height = *self.viewport_height.lock().map_err(|e| {
-            Error::internal(format!("Mutex poisoned: {}", e))
-        })?;
-        let zoom_level = *self.zoom_level.lock().map_err(|e| {
-            Error::internal(format!("Mutex poisoned: {}", e))
-        })?;
-
-        // Calculate capture dimensions (viewport * zoom)
-        let (capture_width, capture_height) = self.capture_dimensions();
-
-        // Capture screen area centered on cursor (with multi-monitor stitching)
-        let image = get_screen_area_around_cursor(capture_width, capture_height)
-            .map_err(|e| Error::input(format!("Failed to capture screen: {}", e)))?;
-
-        // Convert RGBA to RGB (JPEG doesn't support alpha)
-        let rgb_image = image::DynamicImage::ImageRgba8(image).into_rgb8();
-
-        // Scale to viewport size (always send viewport-sized images)
-        let final_image = if zoom_level != 1.0 {
-            debug!("Scaling capture from {}x{} to viewport {}x{}", 
-                   capture_width, capture_height, viewport_width, viewport_height);
-            imageops::resize(&rgb_image, viewport_width, viewport_height, imageops::FilterType::Triangle)
-        } else {
-            rgb_image
-        };
-
-        // Convert to JPEG
-        let mut jpeg_data = Vec::new();
-        final_image.write_to(&mut std::io::Cursor::new(&mut jpeg_data), ImageFormat::Jpeg)
-            .map_err(|e| {
-                Error::input(format!("Failed to encode JPEG: {}", e))
-            })?;
-
-        let final_width = final_image.width();
-        let final_height = final_image.height();
-
-        debug!(
-            "Screen captured: {}x{}, raw JPEG {} bytes (zoom: {:.2})",
-            final_width, final_height,
-            jpeg_data.len(),
-            zoom_level
-        );
-
-        Ok(jpeg_data)
+    /// Capture screen area around cursor and encode as JPEG
+    /// Returns None if screen hasn't changed since last capture (skip-if-unchanged)
+    pub fn capture_around_cursor(&self, last_seq: u64) -> Result<Option<(Vec<u8>, u64)>> {
+        let mut manager = self.capture_manager.lock().unwrap();
+        manager.get_latest_jpeg(last_seq)
     }
 
     /// Get current viewport width
     pub fn get_viewport_width(&self) -> u32 {
-        *self.viewport_width.lock().unwrap()
+        let manager = self.capture_manager.lock().unwrap();
+        manager.viewport_width()
     }
 
     /// Get current viewport height
     pub fn get_viewport_height(&self) -> u32 {
-        *self.viewport_height.lock().unwrap()
+        let manager = self.capture_manager.lock().unwrap();
+        manager.viewport_height()
     }
 
     /// Get current zoom level
     pub fn get_zoom_level(&self) -> f32 {
-        *self.zoom_level.lock().unwrap()
+        let manager = self.capture_manager.lock().unwrap();
+        manager.zoom_level()
+    }
+}
+
+impl Default for ScreenCaptureService {
+    fn default() -> Self {
+        Self::new().unwrap()
     }
 }

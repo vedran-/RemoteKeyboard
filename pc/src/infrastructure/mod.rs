@@ -17,3 +17,4 @@ pub mod config;
 pub mod firewall;
 pub mod screen_capture;
 pub mod screen_capture_utils;
+pub mod capture_manager;
