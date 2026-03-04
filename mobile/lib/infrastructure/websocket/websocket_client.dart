@@ -6,6 +6,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -97,11 +98,18 @@ class WebSocketClient {
   void _listenToMessages() {
     _channel?.stream.listen(
       (data) {
-        try {
-          final message = jsonDecode(data as String) as Map<String, dynamic>;
-          _handleMessage(message);
-        } catch (e) {
-          print('[WebSocket] Error parsing message: $e');
+        // Handle binary frames (screen streaming) and JSON text messages
+        if (data is Uint8List) {
+          // Binary frame = screen frame (raw JPEG bytes)
+          _handleBinaryFrame(data);
+        } else if (data is String) {
+          // Text frame = JSON message
+          try {
+            final message = jsonDecode(data) as Map<String, dynamic>;
+            _handleMessage(message);
+          } catch (e) {
+            print('[WebSocket] Error parsing message: $e');
+          }
         }
       },
       onError: (error) {
@@ -115,34 +123,34 @@ class WebSocketClient {
       },
     );
   }
-  
+
+  /// Handle binary frame (screen streaming)
+  void _handleBinaryFrame(Uint8List data) {
+    print('[WebSocket] Received binary frame (${data.length} bytes), forwarding to listeners');
+    // Forward as screen_frame_binary for ScreenStreamService
+    _messageController.add({
+      'type': 'screen_frame_binary',
+      'bytes': data,
+    });
+  }
+
   /// Handle incoming message from PC
   void _handleMessage(Map<String, dynamic> message) {
     final type = message['type'] as String?;
     print('[WebSocket] Received message type: $type');
 
     switch (type) {
-      case 'connection_accepted':
-        _sessionId = message['session_id'] as String?;
+      case 'connected':
+        _sessionId = message['session'] as String?;
         print('[WebSocket] Connection accepted, session: $_sessionId');
         // IMPORTANT: Also forward to message stream so _waitForConnectionAccepted completes
         _messageController.add(message);
         break;
 
-      case 'connection_rejected':
-        final reason = message['reason'] as String? ?? 'Unknown reason';
-        print('[WebSocket] Connection rejected: $reason');
-        _messageController.add(message);
-        break;
-
-      case 'heartbeat':
-        // Respond to heartbeat
-        _sendHeartbeatAck(message['timestamp'] as int?);
-        break;
-
-      case 'screen_frame':
-        // Screen frames - forward to message stream for ScreenStreamService
-        print('[WebSocket] Received screen frame, forwarding to listeners');
+      case 'error':
+        final code = message['code'] as String? ?? 'unknown';
+        final errorMsg = message['message'] as String? ?? 'Unknown error';
+        print('[WebSocket] Server error: $code - $errorMsg');
         _messageController.add(message);
         break;
 
@@ -158,19 +166,19 @@ class WebSocketClient {
   Future<bool> _waitForConnectionAccepted() async {
     final completer = Completer<bool>();
     final timeout = const Duration(seconds: 5);
-    
+
     Timer(timeout, () {
       if (!completer.isCompleted) {
         completer.complete(false);
       }
     });
-    
+
     messages.first.then((message) {
-      if (message['type'] == 'connection_accepted' && !completer.isCompleted) {
+      if (message['type'] == 'connected' && !completer.isCompleted) {
         completer.complete(true);
       }
     });
-    
+
     return completer.future;
   }
   
@@ -182,9 +190,6 @@ class WebSocketClient {
 
     try {
       final json = command.toJson();
-      // Add timestamp
-      json['timestamp'] = DateTime.now().millisecondsSinceEpoch;
-
       _channel!.sink.add(jsonEncode(json));
       print('[WebSocket] Sent command: ${json['type']}');
     } catch (e) {
@@ -193,14 +198,13 @@ class WebSocketClient {
     }
   }
 
-  /// Send raw JSON message (for custom messages like screen control)
+  /// Send raw message (for screen control commands)
   Future<void> sendRawMessage(Map<String, dynamic> message) async {
     if (!isConnected || _channel == null) {
       throw WebSocketException('Not connected');
     }
 
     try {
-      message['timestamp'] = DateTime.now().millisecondsSinceEpoch;
       final json = jsonEncode(message);
       print('[WebSocket] Sending raw message: $json');
       _channel!.sink.add(json);
@@ -208,21 +212,6 @@ class WebSocketClient {
     } catch (e) {
       print('[WebSocket] Error sending raw message: $e');
       rethrow;
-    }
-  }
-  
-  /// Send heartbeat acknowledgment
-  void _sendHeartbeatAck(int? timestamp) {
-    if (!isConnected || _channel == null) return;
-    
-    try {
-      final message = {
-        'type': 'heartbeat_ack',
-        'timestamp': timestamp ?? DateTime.now().millisecondsSinceEpoch,
-      };
-      _channel!.sink.add(jsonEncode(message));
-    } catch (e) {
-      print('[WebSocket] Error sending heartbeat ack: $e');
     }
   }
   

@@ -1,280 +1,133 @@
 /// Command Entity
-/// 
+///
 /// Commands represent input actions to be sent to the PC.
-/// They are the primary domain entity transferred from mobile to PC.
+/// Implements the flat JSON protocol as specified in implementation_plan.md.
+///
+/// Protocol format (Client → Server):
+/// ```json
+/// { "type": "mouse-move", "dx": 10, "dy": -5 }
+/// { "type": "mouse-click", "button": "left", "state": "press" }
+/// { "type": "mouse-scroll", "dx": 0, "dy": 120 }
+/// { "type": "key-press", "key": "A" }
+/// { "type": "type-text", "text": "Hello World" }
+/// { "type": "media-key", "key": "play_pause" }
+/// { "type": "stream-start", "width": 800, "height": 600, "zoom": 1.3 }
+/// { "type": "stream-update", "width": 800, "height": 600, "zoom": 2.0 }
+/// { "type": "stream-stop" }
+/// ```
 
-import 'package:json_annotation/json_annotation.dart';
+import 'dart:typed_data';
 
-part 'command.g.dart';
-
-/// Core Command entity - represents an input action
-@JsonSerializable()
+/// Core Command entity - represents an input action to send to PC
 class Command {
-  final CommandType type;
-  final dynamic payload;
-  
+  final String type;
+  final Map<String, dynamic>? payload;
+
   const Command({
     required this.type,
-    required this.payload,
+    this.payload,
   });
-  
-  /// Create a mouse move command
+
+  /// Mouse move command
+  /// JSON: { "type": "mouse-move", "dx": 10, "dy": -5 }
   factory Command.mouseMove(int dx, int dy) {
     return Command(
-      type: CommandType.mouse,
-      payload: MouseMovePayload(dx: dx, dy: dy),
+      type: 'mouse-move',
+      payload: {'dx': dx, 'dy': dy},
     );
   }
-  
-  /// Create a mouse click command
+
+  /// Mouse click command
+  /// JSON: { "type": "mouse-click", "button": "left", "state": "press" }
   factory Command.mouseClick(MouseButton button, ButtonState state) {
     return Command(
-      type: CommandType.mouse,
-      payload: MouseClickPayload(button: button, state: state),
+      type: 'mouse-click',
+      payload: {'button': button.name, 'state': state.name},
     );
   }
-  
-  /// Create a mouse scroll command
+
+  /// Mouse scroll command
+  /// JSON: { "type": "mouse-scroll", "dx": 0, "dy": 120 }
   factory Command.mouseScroll(int dx, int dy) {
     return Command(
-      type: CommandType.mouse,
-      payload: MouseScrollPayload(dx: dx, dy: dy),
+      type: 'mouse-scroll',
+      payload: {'dx': dx, 'dy': dy},
     );
   }
-  
-  /// Create a key press command
+
+  /// Key press command
+  /// JSON: { "type": "key-press", "key": "A" }
   factory Command.keyPress(String key) {
     return Command(
-      type: CommandType.keyboard,
-      payload: KeyPressPayload(key: key),
+      type: 'key-press',
+      payload: {'key': key},
     );
   }
-  
-  /// Create a text typing command
+
+  /// Type text command
+  /// JSON: { "type": "type-text", "text": "Hello World" }
   factory Command.typeText(String text) {
     return Command(
-      type: CommandType.keyboard,
-      payload: TypeTextPayload(text: text),
+      type: 'type-text',
+      payload: {'text': text},
     );
   }
-  
-  /// Create a media key command
-  factory Command.mediaKey(MediaAction action) {
-    // Map Dart enum names to server's expected snake_case format
-    final actionMap = {
-      MediaAction.playPause: 'play_pause',
-      MediaAction.nextTrack: 'next',
-      MediaAction.prevTrack: 'prev',
-      MediaAction.volumeUp: 'vol_up',
-      MediaAction.volumeDown: 'vol_down',
-      MediaAction.mute: 'mute',
-    };
-    
-    return Command(
-      type: CommandType.media,
-      payload: actionMap[action]!,
-    );
-  }
-  
-  /// Convert to JSON for WebSocket transmission
-  Map<String, dynamic> toJson() {
-    // Serialize payload based on its type
-    // Server expects: {"action": "...", "data": {...}} for mouse/keyboard
-    final serializedPayload = switch (payload) {
-      MouseMovePayload p => {
-        'action': 'move',
-        'data': p.toJson(),
-      },
-      MouseClickPayload p => {
-        'action': 'click',
-        'data': p.toJson(),
-      },
-      MouseScrollPayload p => {
-        'action': 'scroll',
-        'data': p.toJson(),
-      },
-      KeyPressPayload p => {
-        'action': 'key_press',
-        'data': p.toJson(),
-      },
-      TypeTextPayload p => {
-        'action': 'type_text',
-        'data': p.toJson(),
-      },
-      String s => s,  // Media commands are strings
-      _ => payload,
-    };
 
-    return {
-      'type': type.name,
-      'payload': serializedPayload,
-    };
+  /// Media key command
+  /// JSON: { "type": "media-key", "key": "play_pause" }
+  factory Command.mediaKey(MediaAction action) {
+    return Command(
+      type: 'media-key',
+      payload: {'key': action.serverValue},
+    );
   }
-  
+
+  /// Stream start command
+  /// JSON: { "type": "stream-start", "width": 800, "height": 600, "zoom": 1.3 }
+  factory Command.streamStart({required int width, required int height, required double zoom}) {
+    return Command(
+      type: 'stream-start',
+      payload: {'width': width, 'height': height, 'zoom': zoom},
+    );
+  }
+
+  /// Stream update command
+  /// JSON: { "type": "stream-update", "width": 800, "height": 600, "zoom": 2.0 }
+  factory Command.streamUpdate({required int width, required int height, required double zoom}) {
+    return Command(
+      type: 'stream-update',
+      payload: {'width': width, 'height': height, 'zoom': zoom},
+    );
+  }
+
+  /// Stream stop command
+  /// JSON: { "type": "stream-stop" }
+  factory Command.streamStop() {
+    return const Command(
+      type: 'stream-stop',
+      payload: null,
+    );
+  }
+
+  /// Convert to JSON for WebSocket transmission
+  /// Returns flat JSON format as per protocol spec
+  Map<String, dynamic> toJson() {
+    if (payload == null) {
+      return {'type': type};
+    }
+    return {'type': type, ...payload!};
+  }
+
   /// Create from JSON
   factory Command.fromJson(Map<String, dynamic> json) {
-    final type = CommandType.values.firstWhere(
-      (e) => e.name == json['type'],
-      orElse: () => CommandType.mouse,
-    );
-    
+    final type = json['type'] as String;
+    // Copy all fields except 'type' into payload
+    final payload = Map<String, dynamic>.from(json)..remove('type');
     return Command(
       type: type,
-      payload: json['payload'],
+      payload: payload.isEmpty ? null : payload,
     );
   }
-}
-
-/// Command type enumeration
-enum CommandType {
-  mouse,
-  keyboard,
-  media,
-  custom,
-}
-
-/// Screen frame for streaming from PC
-class ScreenFrame {
-  final int cursorX;
-  final int cursorY;
-  final int monitorId;
-  final int captureWidth;
-  final int captureHeight;
-  final String data;  // Base64 encoded JPEG
-
-  ScreenFrame({
-    required this.cursorX,
-    required this.cursorY,
-    required this.monitorId,
-    required this.captureWidth,
-    required this.captureHeight,
-    required this.data,
-  });
-
-  /// Parse from JSON message
-  factory ScreenFrame.fromJson(Map<String, dynamic> json) {
-    return ScreenFrame(
-      cursorX: json['cursor_x'] as int,
-      cursorY: json['cursor_y'] as int,
-      monitorId: json['monitor_id'] as int,
-      captureWidth: json['capture_width'] as int,
-      captureHeight: json['capture_height'] as int,
-      data: json['data'] as String,
-    );
-  }
-
-  /// Convert to JSON
-  Map<String, dynamic> toJson() {
-    return {
-      'cursor_x': cursorX,
-      'cursor_y': cursorY,
-      'monitor_id': monitorId,
-      'capture_width': captureWidth,
-      'capture_height': captureHeight,
-      'data': data,
-    };
-  }
-}
-
-/// Screen frame request from client to server (mobile → PC)
-/// Client sends viewport dimensions and zoom level, server calculates capture size
-class ScreenFrameRequest {
-  final int viewportWidth;       // Client's display area width
-  final int viewportHeight;      // Client's display area height
-  final double zoomLevel;        // Zoom level: 0.1 (zoomed out) to 5.0 (zoomed in)
-
-  ScreenFrameRequest({
-    required this.viewportWidth,
-    required this.viewportHeight,
-    required this.zoomLevel,
-  });
-
-  /// Convert to JSON for WebSocket transmission
-  Map<String, dynamic> toJson() {
-    return {
-      'viewport_width': viewportWidth,
-      'viewport_height': viewportHeight,
-      'zoom_level': zoomLevel,
-    };
-  }
-}
-
-/// Mouse command payloads
-@JsonSerializable()
-class MouseMovePayload {
-  final int dx;
-  final int dy;
-  
-  const MouseMovePayload({required this.dx, required this.dy});
-  
-  factory MouseMovePayload.fromJson(Map<String, dynamic> json) =>
-      _$MouseMovePayloadFromJson(json);
-  
-  Map<String, dynamic> toJson() => _$MouseMovePayloadToJson(this);
-}
-
-@JsonSerializable()
-class MouseClickPayload {
-  final MouseButton button;
-  final ButtonState state;
-  
-  const MouseClickPayload({required this.button, required this.state});
-  
-  factory MouseClickPayload.fromJson(Map<String, dynamic> json) =>
-      _$MouseClickPayloadFromJson(json);
-  
-  Map<String, dynamic> toJson() => _$MouseClickPayloadToJson(this);
-}
-
-@JsonSerializable()
-class MouseScrollPayload {
-  final int dx;
-  final int dy;
-  
-  const MouseScrollPayload({required this.dx, required this.dy});
-  
-  factory MouseScrollPayload.fromJson(Map<String, dynamic> json) =>
-      _$MouseScrollPayloadFromJson(json);
-  
-  Map<String, dynamic> toJson() => _$MouseScrollPayloadToJson(this);
-}
-
-/// Keyboard command payloads
-@JsonSerializable()
-class KeyPressPayload {
-  final String key;
-  
-  const KeyPressPayload({required this.key});
-  
-  factory KeyPressPayload.fromJson(Map<String, dynamic> json) =>
-      _$KeyPressPayloadFromJson(json);
-  
-  Map<String, dynamic> toJson() => _$KeyPressPayloadToJson(this);
-}
-
-@JsonSerializable()
-class TypeTextPayload {
-  final String text;
-  
-  const TypeTextPayload({required this.text});
-  
-  factory TypeTextPayload.fromJson(Map<String, dynamic> json) =>
-      _$TypeTextPayloadFromJson(json);
-  
-  Map<String, dynamic> toJson() => _$TypeTextPayloadToJson(this);
-}
-
-/// Media command payloads
-@JsonSerializable()
-class MediaPayload {
-  final MediaAction action;
-  
-  const MediaPayload({required this.action});
-  
-  factory MediaPayload.fromJson(Map<String, dynamic> json) =>
-      _$MediaPayloadFromJson(json);
-  
-  Map<String, dynamic> toJson() => _$MediaPayloadToJson(this);
 }
 
 /// Mouse button enumeration
@@ -297,5 +150,49 @@ enum MediaAction {
   prevTrack,
   volumeUp,
   volumeDown,
-  mute,
+  mute;
+
+  /// Server expects snake_case values
+  String get serverValue {
+    switch (this) {
+      case MediaAction.playPause:
+        return 'play_pause';
+      case MediaAction.nextTrack:
+        return 'next';
+      case MediaAction.prevTrack:
+        return 'prev';
+      case MediaAction.volumeUp:
+        return 'vol_up';
+      case MediaAction.volumeDown:
+        return 'vol_down';
+      case MediaAction.mute:
+        return 'mute';
+    }
+  }
+}
+
+/// Screen frame for streaming from PC
+/// Note: In the new protocol, screen frames are sent as binary (raw JPEG bytes),
+/// not as JSON with base64. This class is kept for internal use only.
+class ScreenFrame {
+  final int captureWidth;
+  final int captureHeight;
+  final Uint8List jpegData;  // Raw JPEG bytes (not base64)
+
+  ScreenFrame({
+    required this.captureWidth,
+    required this.captureHeight,
+    required this.jpegData,
+  });
+
+  /// Create from binary JPEG data
+  factory ScreenFrame.fromBinary(Uint8List jpegData) {
+    // Width/height will be extracted from JPEG headers by the image decoder
+    // For now, we store the raw data
+    return ScreenFrame(
+      captureWidth: 0,  // Will be determined from decoded image
+      captureHeight: 0,
+      jpegData: jpegData,
+    );
+  }
 }

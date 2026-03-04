@@ -296,13 +296,7 @@ class _TouchpadScreenState extends State<TouchpadScreen> {
                     print('[Touchpad] Container size: ${_touchpadWidth}x${_touchpadHeight}');
                     print('[Touchpad] isStreaming: $isStreaming, hasFrame: ${screenFrame != null}');
                     if (screenFrame != null) {
-                      print('[Touchpad] Frame size: ${screenFrame.captureWidth}x${screenFrame.captureHeight}, data length: ${screenFrame.data.length}');
-                      try {
-                        final imageData = base64Decode(screenFrame.data);
-                        print('[Touchpad] Decoded image: ${imageData.length} bytes');
-                      } catch (e) {
-                        print('[Touchpad] ERROR decoding image: $e');
-                      }
+                      print('[Touchpad] Frame size: ${screenFrame.captureWidth}x${screenFrame.captureHeight}, JPEG data: ${screenFrame.jpegData.length} bytes');
                     }
 
                     return Listener(
