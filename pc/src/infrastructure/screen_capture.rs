@@ -6,11 +6,9 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 use image::{ImageFormat, imageops};
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use tracing::{debug};
 
 use crate::application::ports::{Result, Error};
-use crate::domain::entities::command::ScreenFrame;
 use crate::infrastructure::screen_capture_utils::get_screen_area_around_cursor;
 
 /// Screen capture service
@@ -57,7 +55,7 @@ impl ScreenCaptureService {
     }
 
     /// Capture screen area around cursor
-    pub fn capture_around_cursor(&self) -> Result<ScreenFrame> {
+    pub fn capture_around_cursor(&self) -> Result<Vec<u8>> {
         let viewport_width = *self.viewport_width.lock().map_err(|e| {
             Error::internal(format!("Mutex poisoned: {}", e))
         })?;
@@ -94,28 +92,17 @@ impl ScreenCaptureService {
                 Error::input(format!("Failed to encode JPEG: {}", e))
             })?;
 
-        // Encode as base64
-        let base64_data = BASE64.encode(&jpeg_data);
-
         let final_width = final_image.width();
         let final_height = final_image.height();
 
         debug!(
-            "Screen captured: {}x{}, JPEG {} bytes, base64 {} bytes (zoom: {:.2})",
+            "Screen captured: {}x{}, raw JPEG {} bytes (zoom: {:.2})",
             final_width, final_height,
             jpeg_data.len(),
-            base64_data.len(),
             zoom_level
         );
 
-        Ok(ScreenFrame {
-            cursor_x: (viewport_width / 2) as i32,  // Cursor is always at center of viewport
-            cursor_y: (viewport_height / 2) as i32,  // Cursor is always at center of viewport
-            monitor_id: 0,  // Multi-monitor stitched, no single monitor ID
-            capture_width: final_width,
-            capture_height: final_height,
-            data: base64_data,
-        })
+        Ok(jpeg_data)
     }
 
     /// Get current viewport width

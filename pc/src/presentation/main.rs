@@ -80,8 +80,6 @@ fn main() {
         host: "0.0.0.0".to_string(),
         port,
         path: "/remote".to_string(),
-        heartbeat_interval_secs: 5,
-        connection_timeout_secs: 30,
     };
 
     let ws_server = WebSocketServer::new(ws_config);
@@ -127,10 +125,10 @@ fn main() {
         loop {
             tokio::select! {
                 Ok(incoming) = command_rx.recv() => {
-                    use remote_keyboard_pc::domain::entities::command::Command;
+                    use remote_keyboard_pc::domain::entities::command::InputAction;
 
                     match incoming.command {
-                        Command::Mouse(cmd) => {
+                        InputAction::Mouse(cmd) => {
                             println!("🖱️  [RECEIVED] Mouse command: {:?}", cmd);
                             let adapter = input_adapter.clone();
                             tokio::spawn(async move {
@@ -140,7 +138,7 @@ fn main() {
                                 }
                             });
                         }
-                        Command::Keyboard(cmd) => {
+                        InputAction::Keyboard(cmd) => {
                             println!("⌨️  [RECEIVED] Keyboard command: {:?}", cmd);
                             let adapter = input_adapter.clone();
                             tokio::spawn(async move {
@@ -150,7 +148,7 @@ fn main() {
                                 }
                             });
                         }
-                        Command::Media(cmd) => {
+                        InputAction::Media(cmd) => {
                             println!("🎵 [RECEIVED] Media command: {:?}", cmd);
                             let adapter = input_adapter.clone();
                             tokio::spawn(async move {
@@ -159,9 +157,6 @@ fn main() {
                                     Err(e) => println!("❌ [FAILED] Media command error: {}", e),
                                 }
                             });
-                        }
-                        Command::Custom(_) => {
-                            println!("🔧 [RECEIVED] Custom command");
                         }
                     }
                 }

@@ -19,15 +19,11 @@ pub trait InputExecutor: Send + Sync {
     async fn execute_media(&self, command: &MediaCommand) -> Result<()>;
     
     /// Execute a command based on type
-    async fn execute(&self, command: &crate::domain::entities::Command) -> Result<()> {
+    async fn execute(&self, command: &crate::domain::entities::command::InputAction) -> Result<()> {
         match command {
-            crate::domain::entities::Command::Mouse(cmd) => self.execute_mouse(cmd).await,
-            crate::domain::entities::Command::Keyboard(cmd) => self.execute_keyboard(cmd).await,
-            crate::domain::entities::Command::Media(cmd) => self.execute_media(cmd).await,
-            crate::domain::entities::Command::Custom(_) => {
-                // Custom commands handled separately
-                Ok(())
-            }
+            crate::domain::entities::command::InputAction::Mouse(cmd) => self.execute_mouse(cmd).await,
+            crate::domain::entities::command::InputAction::Keyboard(cmd) => self.execute_keyboard(cmd).await,
+            crate::domain::entities::command::InputAction::Media(cmd) => self.execute_media(cmd).await,
         }
     }
 }

@@ -29,6 +29,5 @@ pub mod presentation;
 #[cfg(test)]
 mod tests;
 
-// Re-export commonly used types
-pub use domain::entities::command::{Command, MouseCommand, KeyboardCommand, MediaCommand};
+pub use domain::entities::command::{InputAction, ClientMessage, ServerMessage, MouseCommand, KeyboardCommand, MediaCommand};
 pub use domain::value_objects::*;

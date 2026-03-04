@@ -19,28 +19,27 @@ use windows_capture::{
 // Windows API imports (winapi crate)
 #[cfg(target_os = "windows")]
 use winapi::{
-    shared::windef::{POINT, RECT, HMONITOR},
+    shared::windef::{POINT, RECT, HMONITOR, HDC, LPRECT},
+    shared::minwindef::{LPARAM, BOOL},
     um::winuser::{GetCursorPos, GetMonitorInfoW, MonitorFromPoint, MONITORINFOEXW, MONITOR_DEFAULTTONEAREST},
 };
 #[cfg(target_os = "windows")]
 use std::ffi::c_void;
 
-// Callback data for EnumDisplayMonitors (not currently used - grid sampling instead)
-#[allow(dead_code)]
+// Callback data for EnumDisplayMonitors
 #[cfg(target_os = "windows")]
 struct MonitorEnumData {
     monitors: Vec<(HMONITOR, RECT)>,
 }
 
-// Callback function for EnumDisplayMonitors (not currently used - grid sampling instead)
-#[allow(dead_code)]
+// Callback function for EnumDisplayMonitors
 #[cfg(target_os = "windows")]
 unsafe extern "system" fn monitor_enum_proc(
     hmonitor: HMONITOR,
-    _hdcmonitor: *mut c_void,
-    _lprcmonitor: *mut RECT,
-    lparam: isize,
-) -> i32 {
+    _hdcmonitor: HDC,
+    _lprcmonitor: LPRECT,
+    lparam: LPARAM,
+) -> BOOL {
     let data = &mut *(lparam as *mut MonitorEnumData);
     let mut mi = MONITORINFOEXW {
         cbSize: std::mem::size_of::<MONITORINFOEXW>() as u32,
@@ -62,33 +61,13 @@ fn get_all_monitors() -> Result<Vec<(Monitor, i32, i32, i32, i32)>, Box<dyn std:
     };
     
     unsafe {
-        // Enumerate all monitors using Windows API
-        // Use a simple loop with MonitorFromPoint instead of callback
-        let mut seen_monitors = std::collections::HashSet::new();
-        
-        // Sample points in a grid to find all monitors
-        for dx in 0..20 {
-            for dy in 0..20 {
-                let px = dx * 500 - 5000;
-                let py = dy * 500 - 5000;
-                let point = POINT { x: px, y: py };
-                let hmonitor = MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST);
-                
-                if !seen_monitors.contains(&(hmonitor as usize)) {
-                    seen_monitors.insert(hmonitor as usize);
-                    
-                    let mut mi = MONITORINFOEXW {
-                        cbSize: std::mem::size_of::<MONITORINFOEXW>() as u32,
-                        rcMonitor: RECT { left: 0, top: 0, right: 0, bottom: 0 },
-                        rcWork: RECT { left: 0, top: 0, right: 0, bottom: 0 },
-                        dwFlags: 0,
-                        szDevice: [0; 32],
-                    };
-                    GetMonitorInfoW(hmonitor, &mut mi as *mut _ as *mut _);
-                    enum_data.monitors.push((hmonitor, mi.rcMonitor));
-                }
-            }
-        }
+        // Use proper EnumDisplayMonitors Windows API
+        winapi::um::winuser::EnumDisplayMonitors(
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            Some(monitor_enum_proc),
+            &mut enum_data as *mut _ as isize,
+        );
     }
     
     // Convert to our format with windows-capture Monitor objects

@@ -6,6 +6,6 @@ pub mod command;
 pub mod device;
 pub mod connection;
 
-pub use command::{Command, MouseCommand, KeyboardCommand, MediaCommand, CustomCommand};
+pub use command::{InputAction, ClientMessage, ServerMessage, MouseCommand, KeyboardCommand, MediaCommand};
 pub use device::Device;
 pub use connection::Connection;

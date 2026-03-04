@@ -54,8 +54,6 @@ async fn main() {
         host: "0.0.0.0".to_string(),
         port,
         path: "/remote".to_string(),
-        heartbeat_interval_secs: 5,
-        connection_timeout_secs: 30,
     };
     
     let ws_server = WebSocketServer::new(ws_config);
@@ -84,32 +82,29 @@ async fn main() {
     loop {
         tokio::select! {
             Ok(incoming) = command_rx.recv() => {
-                use remote_keyboard_pc::domain::entities::command::Command;
+                use remote_keyboard_pc::domain::entities::command::InputAction;
                 
                 match incoming.command {
-                    Command::Mouse(cmd) => {
+                    InputAction::Mouse(cmd) => {
                         println!("🖱️  Mouse command: {:?}", cmd);
                         let adapter = input_adapter.clone();
                         tokio::spawn(async move {
                             let _ = adapter.execute_mouse(&cmd).await;
                         });
                     }
-                    Command::Keyboard(cmd) => {
+                    InputAction::Keyboard(cmd) => {
                         println!("⌨️  Keyboard command: {:?}", cmd);
                         let adapter = input_adapter.clone();
                         tokio::spawn(async move {
                             let _ = adapter.execute_keyboard(&cmd).await;
                         });
                     }
-                    Command::Media(cmd) => {
+                    InputAction::Media(cmd) => {
                         println!("🎵 Media command: {:?}", cmd);
                         let adapter = input_adapter.clone();
                         tokio::spawn(async move {
                             let _ = adapter.execute_media(&cmd).await;
                         });
-                    }
-                    Command::Custom(_) => {
-                        println!("🔧 Custom command received");
                     }
                 }
             }

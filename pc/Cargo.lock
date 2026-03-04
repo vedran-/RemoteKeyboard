@@ -3694,6 +3694,7 @@ dependencies = [
  "tokio-stream",
  "tokio-test",
  "tokio-tungstenite",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
  "tungstenite",
